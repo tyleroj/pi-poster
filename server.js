@@ -238,44 +238,6 @@ app.get('/api/positions', async (req, res) => {
   }
 });
 
-// Proxy an image URL server-side (avoids CORS on Polymarket S3 images)
-app.get('/api/proxy-image', async (req, res) => {
-  try {
-    const { url } = req.query;
-    if (!url) return res.status(400).send('url required');
-    // Only allow Polymarket-related domains
-    const allowed = ['polymarket.com', 'polymarket-upload.s3', 'amazonaws.com'];
-    if (!allowed.some(d => url.includes(d))) return res.status(403).send('Domain not allowed');
-    const r = await fetch(url);
-    if (!r.ok) return res.status(502).send('Upstream error');
-    res.set('Content-Type', r.headers.get('content-type') || 'image/png');
-    const buf = await r.arrayBuffer();
-    res.send(Buffer.from(buf));
-  } catch (err) {
-    res.status(500).send(err.message);
-  }
-});
-
-// Fetch the twitterCardImage for a market using conditionId from Polymarket's Gamma API
-app.get('/api/slip-image', async (req, res) => {
-  try {
-    const { conditionId } = req.query;
-    if (!conditionId) return res.status(400).json({ error: 'conditionId required' });
-
-    const r = await fetch(`https://gamma-api.polymarket.com/markets?conditionId=${encodeURIComponent(conditionId)}`);
-    if (!r.ok) return res.status(502).json({ error: 'Gamma API error' });
-
-    const markets = await r.json();
-    const market = Array.isArray(markets) ? markets[0] : markets;
-    if (!market) return res.status(404).json({ error: 'Market not found' });
-
-    const imageUrl = market.twitterCardImage || market.image || market.icon || null;
-    res.json({ imageUrl });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
 // Match tool card image directly against a provided list of positions (single Claude call)
 app.post('/api/match-position', upload.single('toolCard'), async (req, res) => {
   try {
