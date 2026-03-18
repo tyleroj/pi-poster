@@ -434,9 +434,23 @@
       padding: 22px; margin-bottom: 16px;
     }
     .winners-header {
-      display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px;
+      display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;
     }
     .winners-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #475569; }
+
+    .winners-subtabs {
+      display: flex; gap: 4px; margin-bottom: 18px;
+      background: rgba(255,255,255,0.04); border-radius: 8px; padding: 3px;
+    }
+    .winners-subtab {
+      flex: 1; padding: 6px 0; font-size: 11px; font-weight: 700;
+      text-align: center; border-radius: 6px; border: none; cursor: pointer;
+      background: none; color: #475569; transition: all 0.15s; letter-spacing: 0.3px;
+    }
+    .winners-subtab.active {
+      background: rgba(255,255,255,0.08); color: #e2e8f0;
+    }
+    .winners-subtab:hover:not(.active) { color: #94a3b8; }
 
     .winner-item {
       background: rgba(255,255,255,0.03);
@@ -454,6 +468,9 @@
     .winner-badge {
       font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 20px;
       background: rgba(95,255,176,0.15); color: #5fffb0;
+    }
+    .winner-badge.pending {
+      background: rgba(148,163,184,0.12); color: #64748b;
     }
     .winner-market {
       font-size: 12px; color: #64748b; font-weight: 600; margin-bottom: 8px;
@@ -849,8 +866,12 @@
 <div id="tabWinners" style="display:none;">
 <div class="glass winners-card">
   <div class="winners-header">
-    <span class="winners-title">🏆 Winning Slips</span>
+    <span class="winners-title">Post History</span>
     <button class="refresh-btn" onclick="loadWinners()">↺ Refresh</button>
+  </div>
+  <div class="winners-subtabs">
+    <button class="winners-subtab active" id="subtabWon"  onclick="switchWinnersSubtab('won')">🏆 Winners</button>
+    <button class="winners-subtab"        id="subtabAll"  onclick="switchWinnersSubtab('all')">📋 All Posts</button>
   </div>
   <div id="winnersList"><div class="winners-empty">Loading...</div></div>
 </div>
@@ -1020,39 +1041,57 @@
   }
 
   // ── Winners tab ────────────────────────────────────────────────────────────
+  let winnersData = [];
+  let winnersSubtab = 'won';
+
+  function switchWinnersSubtab(tab) {
+    winnersSubtab = tab;
+    document.getElementById('subtabWon').classList.toggle('active', tab === 'won');
+    document.getElementById('subtabAll').classList.toggle('active', tab === 'all');
+    renderWinners();
+  }
+
   async function loadWinners() {
     const el = document.getElementById('winnersList');
     el.innerHTML = '<div class="winners-empty"><span class="spinner"></span> Loading...</div>';
     try {
-      const items = await fetch('/api/winners').then(r => r.json());
-      if (!items.length) {
-        el.innerHTML = '<div class="winners-empty">No posted tweets yet. Post a thread to start tracking wins.</div>';
-        return;
-      }
-      el.innerHTML = items.map(item => {
-        const date = item.posted_at
-          ? new Date(item.posted_at).toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' at ' +
-            new Date(item.posted_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-          : '—';
-        const market = item.market_title ? `<div class="winner-market">${escHtml(item.market_title)}</div>` : '';
-        const badge  = item.won ? '<span class="winner-badge">🏆 Won</span>' : '';
-        const qtBtn  = item.won
-          ? `<button class="qt-btn" onclick='openQtModal(${JSON.stringify(JSON.stringify(item))})'>✍️ Generate QT</button>`
-          : '';
-        return `
-          <div class="winner-item ${item.won ? 'won' : ''}">
-            <div class="winner-item-header">
-              <div class="winner-date">${date}</div>
-              ${badge}
-            </div>
-            ${market}
-            <div class="winner-tweet-preview">${escHtml(item.tweet1)}</div>
-            <div class="winner-actions">${qtBtn}</div>
-          </div>`;
-      }).join('');
+      winnersData = await fetch('/api/winners').then(r => r.json());
+      renderWinners();
     } catch (err) {
       el.innerHTML = `<div class="winners-empty">Error loading: ${escHtml(err.message)}</div>`;
     }
+  }
+
+  function renderWinners() {
+    const el = document.getElementById('winnersList');
+    const items = winnersSubtab === 'won' ? winnersData.filter(i => i.won) : winnersData;
+    if (!items.length) {
+      el.innerHTML = winnersSubtab === 'won'
+        ? '<div class="winners-empty">No resolved winners yet. Check back after your bets settle.</div>'
+        : '<div class="winners-empty">No posted tweets yet. Post a thread to start tracking.</div>';
+      return;
+    }
+    el.innerHTML = items.map(item => {
+      const date = item.posted_at
+        ? new Date(item.posted_at).toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' at ' +
+          new Date(item.posted_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        : '—';
+      const market = item.market_title ? `<div class="winner-market">${escHtml(item.market_title)}</div>` : '';
+      const badge  = item.won ? '<span class="winner-badge">🏆 Won</span>' : '<span class="winner-badge pending">⏳ Pending</span>';
+      const qtBtn  = item.won
+        ? `<button class="qt-btn" onclick='openQtModal(${JSON.stringify(JSON.stringify(item))})'>✍️ Generate QT</button>`
+        : '';
+      return `
+        <div class="winner-item ${item.won ? 'won' : ''}">
+          <div class="winner-item-header">
+            <div class="winner-date">${date}</div>
+            ${badge}
+          </div>
+          ${market}
+          <div class="winner-tweet-preview">${escHtml(item.tweet1)}</div>
+          <div class="winner-actions">${qtBtn}</div>
+        </div>`;
+    }).join('');
   }
 
   // ── QT modal ───────────────────────────────────────────────────────────────
