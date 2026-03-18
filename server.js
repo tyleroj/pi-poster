@@ -126,42 +126,60 @@ async function getAccessToken() {
 
 // ── Upload media to Twitter v1.1 ──────────────────────────────────────────────
 async function uploadMedia(buffer, mimeType, accessToken) {
-  // Use base64 media_data — simpler and more reliable than multipart with fetch
   const base64 = buffer.toString('base64');
+  // Simple upload: only media_data required; media_category helps Twitter process correctly
+  const category = mimeType.startsWith('image/gif') ? 'tweet_gif' : 'tweet_image';
+  const params = new URLSearchParams();
+  params.append('media_data', base64);
+  params.append('media_category', category);
+
+  console.log(`[media] Uploading ${mimeType} (${Math.round(buffer.length / 1024)}KB), category=${category}`);
+
   const res = await fetch('https://upload.twitter.com/1.1/media/upload.json', {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${accessToken}`,
       'Content-Type': 'application/x-www-form-urlencoded'
     },
-    body: new URLSearchParams({ media_data: base64, media_type: mimeType }).toString()
+    body: params.toString()
   });
   const text = await res.text();
-  if (!res.ok) throw new Error(`Media upload ${res.status}: ${text.slice(0, 300)}`);
-  return JSON.parse(text).media_id_string;
+  console.log(`[media] Twitter response ${res.status}:`, text.slice(0, 500));
+  if (!res.ok) throw new Error(`Media upload ${res.status}: ${text.slice(0, 400)}`);
+  const json = JSON.parse(text);
+  console.log(`[media] Got media_id_string: ${json.media_id_string}`);
+  return json.media_id_string;
 }
 
 // ── Post a thread ─────────────────────────────────────────────────────────────
 // slipFile / toolFile are optional { buffer, mimetype } objects
+// Returns { tweet1Id, tweet2Id, mediaErrors[] }
 async function postThread(tweet1, tweet2, slipFile, toolFile) {
   const token = await getAccessToken();
 
   // Upload images if provided (slip → tweet1, tool card → tweet2)
   const tweet1Body = { text: tweet1 };
   const tweet2Body = { text: tweet2 };
+  const mediaErrors = [];
 
   if (slipFile?.buffer) {
     try {
       const mediaId = await uploadMedia(slipFile.buffer, slipFile.mimetype, token);
       tweet1Body.media = { media_ids: [mediaId] };
-    } catch (e) { console.warn('Slip upload failed:', e.message); }
+    } catch (e) {
+      console.error('[media] Slip upload failed:', e.message);
+      mediaErrors.push(`Slip: ${e.message}`);
+    }
   }
 
   if (toolFile?.buffer) {
     try {
       const mediaId = await uploadMedia(toolFile.buffer, toolFile.mimetype, token);
       tweet2Body.media = { media_ids: [mediaId] };
-    } catch (e) { console.warn('Tool card upload failed:', e.message); }
+    } catch (e) {
+      console.error('[media] Tool card upload failed:', e.message);
+      mediaErrors.push(`Tool card: ${e.message}`);
+    }
   }
 
   const r1 = await twitterFetch('POST', '/tweets', token, tweet1Body);
@@ -175,7 +193,7 @@ async function postThread(tweet1, tweet2, slipFile, toolFile) {
   const d2 = await r2.json();
   if (!r2.ok) throw new Error(d2.detail || d2.title || JSON.stringify(d2));
 
-  return { tweet1Id, tweet2Id: d2.data.id };
+  return { tweet1Id, tweet2Id: d2.data.id, mediaErrors };
 }
 
 // ── OAuth routes ──────────────────────────────────────────────────────────────
@@ -661,6 +679,22 @@ app.post('/generate', upload.fields([
   }
 });
 
+// ── Debug: test media upload without posting ──────────────────────────────────
+app.get('/debug/media', async (req, res) => {
+  try {
+    const token = await getAccessToken();
+    // Tiny 1×1 white PNG
+    const png1x1 = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwADhQGAWjR9awAAAABJRU5ErkJggg==',
+      'base64'
+    );
+    const mediaId = await uploadMedia(png1x1, 'image/png', token);
+    res.json({ success: true, media_id_string: mediaId });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // ── Post now ──────────────────────────────────────────────────────────────────
 app.post('/post/now', upload.fields([
   { name: 'slip',     maxCount: 1 },
@@ -672,6 +706,8 @@ app.post('/post/now', upload.fields([
 
     const slipFile  = req.files?.['slip']?.[0]     || null;
     const toolFile  = req.files?.['toolCard']?.[0] || null;
+
+    console.log(`[post/now] slip=${slipFile ? slipFile.originalname + ' ' + Math.round(slipFile.size/1024) + 'KB' : 'none'}, tool=${toolFile ? toolFile.originalname + ' ' + Math.round(toolFile.size/1024) + 'KB' : 'none'}`);
 
     const result = await postThread(tweet1, tweet2, slipFile, toolFile);
     // Save to history so the Winners tab can track it

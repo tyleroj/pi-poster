@@ -1205,7 +1205,12 @@
 
       const data = await fetch('/post/now', { method: 'POST', body: fd }).then(r => r.json());
       if (data.error) throw new Error(data.error);
-      showToast('Thread posted! 🎉', 'success');
+      if (data.mediaErrors && data.mediaErrors.length > 0) {
+        showToast('Posted (images failed to attach)', 'error');
+        console.warn('Media upload errors:', data.mediaErrors);
+      } else {
+        showToast('Thread posted! 🎉', 'success');
+      }
     } catch (err) {
       showToast(err.message, 'error');
     } finally {
