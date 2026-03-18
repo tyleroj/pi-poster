@@ -124,24 +124,67 @@ async function getAccessToken() {
   return auth.access_token;
 }
 
-// ── Upload media to Twitter v1.1 ──────────────────────────────────────────────
-async function uploadMedia(buffer, mimeType, accessToken) {
-  const base64 = buffer.toString('base64');
-  // Simple upload: only media_data required; media_category helps Twitter process correctly
+// ── OAuth 1.0a signing (required for Twitter v1.1 media upload) ───────────────
+function oauth1Header(method, url, bodyParams = {}) {
+  const consumerKey    = process.env.TWITTER_CLIENT_ID;
+  const consumerSecret = process.env.TWITTER_CLIENT_SECRET;
+  const accessToken    = process.env.TWITTER_ACCESS_TOKEN;
+  const accessSecret   = process.env.TWITTER_ACCESS_TOKEN_SECRET;
+
+  if (!accessToken || !accessSecret) {
+    throw new Error('TWITTER_ACCESS_TOKEN / TWITTER_ACCESS_TOKEN_SECRET env vars not set');
+  }
+
+  const oauthParams = {
+    oauth_consumer_key:     consumerKey,
+    oauth_nonce:            crypto.randomBytes(16).toString('hex'),
+    oauth_signature_method: 'HMAC-SHA1',
+    oauth_timestamp:        Math.floor(Date.now() / 1000).toString(),
+    oauth_token:            accessToken,
+    oauth_version:          '1.0'
+  };
+
+  // Combine OAuth params + body params for signing
+  const allParams = { ...oauthParams, ...bodyParams };
+  const paramStr  = Object.keys(allParams).sort()
+    .map(k => `${encodeURIComponent(k)}=${encodeURIComponent(allParams[k])}`)
+    .join('&');
+
+  const baseStr    = `${method.toUpperCase()}&${encodeURIComponent(url)}&${encodeURIComponent(paramStr)}`;
+  const signingKey = `${encodeURIComponent(consumerSecret)}&${encodeURIComponent(accessSecret)}`;
+  const signature  = crypto.createHmac('sha1', signingKey).update(baseStr).digest('base64');
+
+  oauthParams.oauth_signature = signature;
+  const header = 'OAuth ' + Object.keys(oauthParams).sort()
+    .map(k => `${encodeURIComponent(k)}="${encodeURIComponent(oauthParams[k])}"`)
+    .join(', ');
+
+  return header;
+}
+
+// ── Upload media to Twitter v1.1 (OAuth 1.0a required) ───────────────────────
+async function uploadMedia(buffer, mimeType) {
+  const base64   = buffer.toString('base64');
   const category = mimeType.startsWith('image/gif') ? 'tweet_gif' : 'tweet_image';
-  const params = new URLSearchParams();
-  params.append('media_data', base64);
-  params.append('media_category', category);
+  const uploadUrl = 'https://upload.twitter.com/1.1/media/upload.json';
+
+  // Body params needed for signing (media_data is too large to sign, per Twitter docs)
+  const signParams = { media_category: category };
+  const authHeader = oauth1Header('POST', uploadUrl, signParams);
+
+  const body = new URLSearchParams();
+  body.append('media_data',    base64);
+  body.append('media_category', category);
 
   console.log(`[media] Uploading ${mimeType} (${Math.round(buffer.length / 1024)}KB), category=${category}`);
 
-  const res = await fetch('https://upload.twitter.com/1.1/media/upload.json', {
-    method: 'POST',
+  const res = await fetch(uploadUrl, {
+    method:  'POST',
     headers: {
-      Authorization: `Bearer ${accessToken}`,
+      Authorization:  authHeader,
       'Content-Type': 'application/x-www-form-urlencoded'
     },
-    body: params.toString()
+    body: body.toString()
   });
   const text = await res.text();
   console.log(`[media] Twitter response ${res.status}:`, text.slice(0, 500));
@@ -164,7 +207,7 @@ async function postThread(tweet1, tweet2, slipFile, toolFile) {
 
   if (slipFile?.buffer) {
     try {
-      const mediaId = await uploadMedia(slipFile.buffer, slipFile.mimetype, token);
+      const mediaId = await uploadMedia(slipFile.buffer, slipFile.mimetype);
       tweet1Body.media = { media_ids: [mediaId] };
     } catch (e) {
       console.error('[media] Slip upload failed:', e.message);
@@ -174,7 +217,7 @@ async function postThread(tweet1, tweet2, slipFile, toolFile) {
 
   if (toolFile?.buffer) {
     try {
-      const mediaId = await uploadMedia(toolFile.buffer, toolFile.mimetype, token);
+      const mediaId = await uploadMedia(toolFile.buffer, toolFile.mimetype);
       tweet2Body.media = { media_ids: [mediaId] };
     } catch (e) {
       console.error('[media] Tool card upload failed:', e.message);
@@ -682,13 +725,12 @@ app.post('/generate', upload.fields([
 // ── Debug: test media upload without posting ──────────────────────────────────
 app.get('/debug/media', async (req, res) => {
   try {
-    const token = await getAccessToken();
-    // Tiny 1×1 white PNG
+    // Tiny 1×1 white PNG — tests OAuth 1.0a signing without posting a tweet
     const png1x1 = Buffer.from(
       'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwADhQGAWjR9awAAAABJRU5ErkJggg==',
       'base64'
     );
-    const mediaId = await uploadMedia(png1x1, 'image/png', token);
+    const mediaId = await uploadMedia(png1x1, 'image/png');
     res.json({ success: true, media_id_string: mediaId });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
