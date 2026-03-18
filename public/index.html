@@ -931,23 +931,32 @@
   }
 
   async function tryMatchPosition(imageFile) {
-    // Show loading
     document.getElementById('positionCard').classList.remove('visible');
     document.getElementById('posNone').classList.remove('visible');
     document.getElementById('posLoading').classList.add('visible');
 
     try {
-      // Step 1: Extract market title from image
+      // Fetch fresh positions, then send image + position list to Claude in one call
+      await fetchPositions();
+      if (!allPositions.length) { showPositionNone(); return; }
+
+      const positionsList = allPositions.map((p, i) => ({
+        index: i,
+        title: posMarketTitle(p),
+        outcome: p.outcome || ''
+      }));
+
       const fd = new FormData();
       fd.append('toolCard', imageFile);
-      const { title } = await fetch('/api/extract-market', { method: 'POST', body: fd }).then(r => r.json());
-      if (!title) { showPositionNone(); return; }
+      fd.append('positions', JSON.stringify(positionsList));
 
-      // Step 2: Fuzzy match against positions
-      await fetchPositions(); // ensure fresh
-      const match = fuzzyMatchPosition(title);
-      if (match) showPositionMatch(match);
-      else showPositionNone();
+      const { index } = await fetch('/api/match-position', { method: 'POST', body: fd }).then(r => r.json());
+
+      if (index !== null && index !== undefined && allPositions[index]) {
+        showPositionMatch(allPositions[index]);
+      } else {
+        showPositionNone();
+      }
     } catch (e) {
       showPositionNone();
     }

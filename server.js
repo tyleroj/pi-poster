@@ -238,24 +238,31 @@ app.get('/api/positions', async (req, res) => {
   }
 });
 
-// Extract market title from tool card image (fast haiku call)
-app.post('/api/extract-market', upload.single('toolCard'), async (req, res) => {
+// Match tool card image directly against a provided list of positions (single Claude call)
+app.post('/api/match-position', upload.single('toolCard'), async (req, res) => {
   try {
     const file = req.file;
+    const positions = JSON.parse(req.body.positions || '[]');
     if (!file) return res.status(400).json({ error: 'No image' });
+    if (!positions.length) return res.json({ index: null });
+
     const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    const list = positions.map((p, i) => `${i}: ${p.title} (${p.outcome || '?'})`).join('\n');
+
     const msg = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 150,
+      max_tokens: 10,
       messages: [{
         role: 'user',
         content: [
           { type: 'image', source: { type: 'base64', media_type: file.mimetype, data: file.buffer.toString('base64') } },
-          { type: 'text', text: 'What is the prediction market question/title shown in this screenshot? Return ONLY the market title text, nothing else. No quotes, no explanation.' }
+          { type: 'text', text: `This is a Prediction Insiders tool card screenshot. It shows a bet on a specific team or outcome.\n\nHere are the user's open Polymarket positions (index: market title):\n${list}\n\nWhich index number best matches what is shown in the tool card? Reply with ONLY the number. If none match, reply with -1.` }
         ]
       }]
     });
-    res.json({ title: msg.content[0].text.trim() });
+
+    const idx = parseInt(msg.content[0].text.trim(), 10);
+    res.json({ index: (isNaN(idx) || idx < 0) ? null : idx });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
