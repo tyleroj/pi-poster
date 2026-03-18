@@ -695,66 +695,18 @@
 
   <div class="upload-row">
     <div>
-      <div class="upload-label">Betting Slip <span class="badge">Auto</span></div>
-
-      <!-- Position matched state -->
-      <div class="position-card" id="positionCard">
-        <div class="position-card-header">
-          <div class="position-market" id="posMarket">—</div>
-          <div class="position-outcome" id="posOutcome">YES</div>
+      <div class="upload-label">Betting Slip <span class="badge">Optional</span></div>
+      <div class="upload-zone" id="slipZone">
+        <input type="file" id="slipInput" accept="image/*" />
+        <div class="upload-empty">
+          <div class="upload-icon">🧾</div>
+          <div class="upload-title">Betting Slip</div>
+          <div class="upload-hint">drop or click to browse</div>
         </div>
-        <div class="position-stats">
-          <div class="pos-stat">
-            <div class="pos-stat-label">Entry</div>
-            <div class="pos-stat-value" id="posEntry">—</div>
-          </div>
-          <div class="pos-stat">
-            <div class="pos-stat-label">Size</div>
-            <div class="pos-stat-value" id="posSize">—</div>
-          </div>
-          <div class="pos-stat">
-            <div class="pos-stat-label">Current</div>
-            <div class="pos-stat-value" id="posCurrent">—</div>
-          </div>
-        </div>
-        <div class="position-swap-row">
-          <button class="position-swap-btn" onclick="toggleSwapDropdown()">↕ Wrong match?</button>
-          <button class="position-clear-btn" onclick="clearPositionMatch()">✕ clear</button>
-        </div>
-        <!-- Inline swap: shown when "Wrong match?" is clicked -->
-        <div class="position-swap-picker" id="posSwapPicker" style="display:none;">
-          <select class="position-select" id="positionSwapSelect">
-            <option value="">— pick the correct position —</option>
-          </select>
-          <button class="position-select-btn" onclick="selectFromSwapDropdown()">Use This</button>
-        </div>
-      </div>
-
-      <!-- Loading state -->
-      <div class="position-loading" id="posLoading">
-        <span class="spinner"></span> Matching position...
-      </div>
-
-      <!-- No match / manual picker fallback -->
-      <div class="position-none" id="posNone">
-        <div class="position-none-label">Pick your position:</div>
-        <select class="position-select" id="positionSelect">
-          <option value="">— loading positions... —</option>
-        </select>
-        <button class="position-select-btn" onclick="selectPositionFromDropdown()">Use This Position</button>
-        <div class="position-or">or upload slip manually below</div>
-        <div class="upload-zone" id="slipZone">
-          <input type="file" id="slipInput" accept="image/*" />
-          <div class="upload-empty">
-            <div class="upload-icon">🧾</div>
-            <div class="upload-title">Betting Slip</div>
-            <div class="upload-hint">drop or click to browse</div>
-          </div>
-          <div class="upload-preview" id="slipPreview">
-            <img id="slipImg" src="" alt="Slip" />
-            <div class="preview-actions">
-              <button class="preview-btn" onclick="event.stopPropagation(); document.getElementById('slipInput').click()">Change</button>
-            </div>
+        <div class="upload-preview" id="slipPreview">
+          <img id="slipImg" src="" alt="Slip" />
+          <div class="preview-actions">
+            <button class="preview-btn" onclick="event.stopPropagation(); document.getElementById('slipInput').click()">Change</button>
           </div>
         </div>
       </div>
@@ -887,158 +839,10 @@
     if (tab === 'winners') loadWinners();
   }
 
-  // ── Polymarket position matching ──────────────────────────────────────────
-  let matchedPosition = null;
-  let allPositions = [];
+  // ── Slip market data (extracted silently during generate) ────────────────────
+  let generatedMarketTitle = null;
+  let generatedEntryPrice  = null;
 
-  // Get the market title from a position object (try multiple field names)
-  function posMarketTitle(pos) {
-    return pos.market || pos.title || pos.question || pos.marketName || pos.name || '';
-  }
-
-  // Fetch all positions and populate dropdown
-  async function fetchPositions() {
-    try {
-      const data = await fetch('/api/positions').then(r => r.json());
-      if (Array.isArray(data)) {
-        allPositions = data;
-        populatePositionDropdown();
-      }
-    } catch (e) { /* silent */ }
-  }
-
-  function populatePositionDropdown() {
-    const sel = document.getElementById('positionSelect');
-    if (!sel) return;
-    sel.innerHTML = '<option value="">— select your position —</option>';
-    allPositions.forEach((pos, i) => {
-      const title = posMarketTitle(pos);
-      const outcome = pos.outcome || '';
-      const entryC = pos.avgPrice ? Math.round(pos.avgPrice * 100) + '¢' : '';
-      const label = [title, outcome, entryC].filter(Boolean).join(' · ');
-      const opt = document.createElement('option');
-      opt.value = i;
-      opt.textContent = label || `Position ${i + 1}`;
-      sel.appendChild(opt);
-    });
-    if (!allPositions.length) sel.innerHTML = '<option value="">— no open positions found —</option>';
-  }
-
-  function selectPositionFromDropdown() {
-    const sel = document.getElementById('positionSelect');
-    const idx = parseInt(sel.value, 10);
-    if (isNaN(idx) || !allPositions[idx]) return;
-    showPositionMatch(allPositions[idx]);
-  }
-
-  function toggleSwapDropdown() {
-    const picker = document.getElementById('posSwapPicker');
-    const isHidden = picker.style.display === 'none';
-    picker.style.display = isHidden ? 'flex' : 'none';
-    if (isHidden) {
-      // Populate the swap dropdown with all positions
-      const sel = document.getElementById('positionSwapSelect');
-      sel.innerHTML = '<option value="">— pick the correct position —</option>';
-      allPositions.forEach((pos, i) => {
-        const title = posMarketTitle(pos);
-        const outcome = pos.outcome || '';
-        const entryC = pos.avgPrice ? Math.round(pos.avgPrice * 100) + '¢' : '';
-        const label = [title, outcome, entryC].filter(Boolean).join(' · ');
-        const opt = document.createElement('option');
-        opt.value = i;
-        opt.textContent = label || `Position ${i + 1}`;
-        sel.appendChild(opt);
-      });
-    }
-  }
-
-  function selectFromSwapDropdown() {
-    const sel = document.getElementById('positionSwapSelect');
-    const idx = parseInt(sel.value, 10);
-    if (isNaN(idx) || !allPositions[idx]) return;
-    document.getElementById('posSwapPicker').style.display = 'none';
-    showPositionMatch(allPositions[idx]);
-  }
-
-  function fuzzyMatchPosition(title) {
-    if (!title || !allPositions.length) return null;
-    const words = title.toLowerCase().split(/\s+/).filter(w => w.length > 3);
-    if (!words.length) return null;
-    let best = null, bestScore = 0;
-    allPositions.forEach(pos => {
-      // Try all possible title fields
-      const market = posMarketTitle(pos).toLowerCase();
-      const hits = words.filter(w => market.includes(w)).length;
-      const score = hits / words.length;
-      if (score > bestScore && score >= 0.3) { bestScore = score; best = pos; }
-    });
-    return best;
-  }
-
-  function showPositionMatch(pos) {
-    matchedPosition = pos;
-    // Hide swap picker if open
-    const swapPicker = document.getElementById('posSwapPicker');
-    if (swapPicker) swapPicker.style.display = 'none';
-    document.getElementById('posMarket').textContent   = posMarketTitle(pos) || '?';
-    const outcomeEl = document.getElementById('posOutcome');
-    outcomeEl.textContent = pos.outcome || 'YES';
-    outcomeEl.className = 'position-outcome' + (pos.outcome?.toUpperCase() === 'NO' ? ' no' : '');
-    const entryC = pos.avgPrice ? Math.round(pos.avgPrice * 100) + '¢' : '?';
-    document.getElementById('posEntry').textContent   = entryC;
-    document.getElementById('posSize').textContent    = pos.initialValue ? '$' + pos.initialValue.toFixed(0) : (pos.size ? pos.size.toFixed(0) + ' sh' : '?');
-    document.getElementById('posCurrent').textContent = pos.currentValue ? '$' + pos.currentValue.toFixed(0) : '?';
-    document.getElementById('positionCard').classList.add('visible');
-    document.getElementById('posLoading').classList.remove('visible');
-    document.getElementById('posNone').classList.remove('visible');
-  }
-
-  function showPositionNone() {
-    matchedPosition = null;
-    document.getElementById('positionCard').classList.remove('visible');
-    document.getElementById('posLoading').classList.remove('visible');
-    document.getElementById('posNone').classList.add('visible');
-    populatePositionDropdown(); // ensure dropdown is up to date
-  }
-
-  function clearPositionMatch() {
-    matchedPosition = null;
-    document.getElementById('positionCard').classList.remove('visible');
-    document.getElementById('posNone').classList.add('visible');
-    populatePositionDropdown();
-  }
-
-  async function tryMatchPosition(imageFile) {
-    document.getElementById('positionCard').classList.remove('visible');
-    document.getElementById('posNone').classList.remove('visible');
-    document.getElementById('posLoading').classList.add('visible');
-
-    try {
-      // Fetch fresh positions, then send image + position list to Claude in one call
-      await fetchPositions();
-      if (!allPositions.length) { showPositionNone(); return; }
-
-      const positionsList = allPositions.map((p, i) => ({
-        index: i,
-        title: posMarketTitle(p),
-        outcome: p.outcome || ''
-      }));
-
-      const fd = new FormData();
-      fd.append('toolCard', imageFile);
-      fd.append('positions', JSON.stringify(positionsList));
-
-      const { index } = await fetch('/api/match-position', { method: 'POST', body: fd }).then(r => r.json());
-
-      if (index !== null && index !== undefined && allPositions[index]) {
-        showPositionMatch(allPositions[index]);
-      } else {
-        showPositionNone();
-      }
-    } catch (e) {
-      showPositionNone();
-    }
-  }
 
   // ── Winners tab ────────────────────────────────────────────────────────────
   let winnersData = [];
@@ -1303,12 +1107,6 @@
     if (tImg) { tImg.src = url; document.getElementById('tweetImg2').classList.add('visible'); }
   });
 
-  // Auto-match position on tool card upload
-  document.getElementById('toolInput').addEventListener('change', function() {
-    const file = this.files[0];
-    if (file) tryMatchPosition(file);
-  });
-
   // Style buttons
   document.querySelectorAll('.style-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -1344,6 +1142,10 @@
 
       const data = await fetch('/generate', { method: 'POST', body: fd }).then(r => r.json());
       if (data.error) throw new Error(data.error);
+
+      // Store market info for Winners tracking (extracted silently from slip)
+      generatedMarketTitle = data.marketTitle || null;
+      generatedEntryPrice  = data.entryPrice  || null;
 
       // Fill tweets
       const ta1 = document.getElementById('tweet1');
@@ -1395,8 +1197,8 @@
       const fd = new FormData();
       fd.append('tweet1', tweet1);
       fd.append('tweet2', tweet2);
-      fd.append('condition_id', matchedPosition?.conditionId || matchedPosition?.condition_id || '');
-      fd.append('market_title', matchedPosition ? posMarketTitle(matchedPosition) : '');
+      if (generatedMarketTitle) fd.append('market_title', generatedMarketTitle);
+      if (generatedEntryPrice)  fd.append('entry_price',  generatedEntryPrice);
       const slipFile = document.getElementById('slipInput').files[0];
       const toolFile = document.getElementById('toolInput').files[0];
       if (slipFile) fd.append('slip', slipFile);

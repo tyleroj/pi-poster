@@ -44,6 +44,7 @@ db.exec(`
 const qCols = db.prepare('PRAGMA table_info(queue)').all().map(c => c.name);
 if (!qCols.includes('condition_id')) db.exec('ALTER TABLE queue ADD COLUMN condition_id TEXT');
 if (!qCols.includes('market_title'))  db.exec('ALTER TABLE queue ADD COLUMN market_title TEXT');
+if (!qCols.includes('entry_price'))   db.exec('ALTER TABLE queue ADD COLUMN entry_price INTEGER');
 
 // ── Middleware ────────────────────────────────────────────────────────────────
 app.use(express.static('public'));
@@ -377,17 +378,29 @@ app.get('/api/winners', async (req, res) => {
       if (Array.isArray(d)) positions = d;
     } catch (e) { /* continue without position data */ }
 
-    const posMap = {};
-    positions.forEach(p => {
-      const key = p.conditionId || p.condition_id;
-      if (key) posMap[key] = p;
-    });
+    // Match a DB item to a Polymarket position using market title keywords + entry price
+    function matchPosition(item, positions) {
+      if (!item.market_title || !item.entry_price) return null;
+      const targetPrice = item.entry_price / 100; // cents → decimal (e.g. 66 → 0.66)
+      const keywords = item.market_title.toLowerCase()
+        .replace(/[^a-z0-9\s.\-]/g, ' ').split(/\s+/).filter(w => w.length > 2);
+
+      let best = null, bestScore = 0;
+      for (const pos of positions) {
+        const posTitle = (pos.market || pos.title || pos.question || '').toLowerCase();
+        // Price must be within 3 cents — this alone eliminates almost all wrong matches
+        if (pos.avgPrice != null && Math.abs(pos.avgPrice - targetPrice) > 0.03) continue;
+        const hits = keywords.filter(w => posTitle.includes(w)).length;
+        const score = keywords.length ? hits / keywords.length : 0;
+        if (score > bestScore && score >= 0.25) { bestScore = score; best = pos; }
+      }
+      return best;
+    }
 
     const annotated = posted.map(item => {
-      const pos = item.condition_id ? (posMap[item.condition_id] || null) : null;
+      const pos = matchPosition(item, positions);
       let won = false;
       if (pos) {
-        // Won = redeemed with payout OR current value ≥ 99% of shares (settled at 100c)
         if (pos.redeemed && pos.cashPaidOut > 0) won = true;
         else if (pos.size > 0 && pos.currentValue >= pos.size * 0.99) won = true;
         else if (pos.winnings > 0) won = true;
@@ -622,7 +635,28 @@ app.post('/generate', upload.fields([
     });
 
     const parts = msg.content[0].text.split('---TWEET-BREAK---');
-    res.json({ tweet1: parts[0]?.trim() || '', tweet2: parts[1]?.trim() || '' });
+
+    // Silently extract market title + entry price from slip for Winners tracking
+    let marketTitle = null, entryPrice = null;
+    if (slipFile) {
+      try {
+        const ex = await client.messages.create({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 60,
+          messages: [{ role: 'user', content: [
+            { type: 'image', source: { type: 'base64', media_type: slipFile.mimetype, data: slipFile.buffer.toString('base64') } },
+            { type: 'text', text: 'From this Polymarket bet slip, reply in EXACTLY this format:\nMARKET: [full market/bet description shown on slip]\nPRICE: [entry price as integer cents, e.g. 66]' }
+          ]}]
+        });
+        const t = ex.content[0].text;
+        const mMatch = t.match(/MARKET:\s*(.+)/i);
+        const pMatch = t.match(/PRICE:\s*(\d+)/i);
+        if (mMatch) marketTitle = mMatch[1].trim();
+        if (pMatch) entryPrice  = parseInt(pMatch[1], 10);
+      } catch (e) { /* non-fatal */ }
+    }
+
+    res.json({ tweet1: parts[0]?.trim() || '', tweet2: parts[1]?.trim() || '', marketTitle, entryPrice });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });
@@ -635,7 +669,7 @@ app.post('/post/now', upload.fields([
   { name: 'toolCard', maxCount: 1 }
 ]), async (req, res) => {
   try {
-    const { tweet1, tweet2, condition_id, market_title } = req.body;
+    const { tweet1, tweet2, market_title, entry_price } = req.body;
     if (!tweet1 || !tweet2) return res.status(400).json({ error: 'Both tweets required' });
 
     const slipFile  = req.files?.['slip']?.[0]     || null;
@@ -643,11 +677,11 @@ app.post('/post/now', upload.fields([
 
     const result = await postThread(tweet1, tweet2, slipFile, toolFile);
     // Save to history so the Winners tab can track it
-    db.prepare(`INSERT INTO queue (tweet1, tweet2, scheduled_at, status, posted_at, tweet1_id, tweet2_id, condition_id, market_title)
+    db.prepare(`INSERT INTO queue (tweet1, tweet2, scheduled_at, status, posted_at, tweet1_id, tweet2_id, market_title, entry_price)
                 VALUES (?,?,?,?,?,?,?,?,?)`)
       .run(tweet1, tweet2, Date.now(), 'posted', Date.now(),
            result.tweet1Id, result.tweet2Id,
-           condition_id || null, market_title || null);
+           market_title || null, entry_price ? parseInt(entry_price, 10) : null);
     res.json({ success: true, ...result });
   } catch (err) {
     console.error('Post error:', err);
