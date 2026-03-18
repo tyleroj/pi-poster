@@ -251,12 +251,24 @@ app.post('/api/match-position', upload.single('toolCard'), async (req, res) => {
 
     const msg = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 10,
+      max_tokens: 20,
       messages: [{
         role: 'user',
         content: [
           { type: 'image', source: { type: 'base64', media_type: file.mimetype, data: file.buffer.toString('base64') } },
-          { type: 'text', text: `This is a Prediction Insiders tool card screenshot. It shows a bet on a specific team or outcome.\n\nHere are the user's open Polymarket positions (index: market title):\n${list}\n\nWhich index number best matches what is shown in the tool card? Reply with ONLY the number. If none match, reply with -1.` }
+          { type: 'text', text: `This is a Prediction Insiders tool card screenshot showing a sports bet on Polymarket.
+
+Look at the tool card and identify:
+- Team A (one team in the matchup)
+- Team B (the other team / opponent)
+- Which team the bet is ON
+
+Here are the user's open Polymarket positions:
+${list}
+
+Find the position whose title contains BOTH team names from the specific matchup shown in the tool card. The correct match must include both teams — not just one team name. If a team appears in multiple positions (e.g. "Louisville vs UNC" and "Louisville vs South Florida"), you MUST match the one with the correct opponent.
+
+Reply with ONLY the index number of the correct match. If no position contains both teams from the matchup, reply with -1.` }
         ]
       }]
     });

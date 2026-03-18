@@ -374,12 +374,27 @@
     .pos-stat { text-align: center; }
     .pos-stat-label { font-size: 10px; color: #475569; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
     .pos-stat-value { font-size: 13px; color: #e2e8f0; font-weight: 700; margin-top: 2px; }
-    .position-change-btn {
+    .position-swap-row {
+      display: flex; gap: 10px; align-items: center; margin-top: 2px;
+    }
+    .position-swap-btn {
+      font-size: 10px; font-weight: 600; color: #818cf8;
+      background: none; border: none; cursor: pointer;
+      text-decoration: underline; padding: 0;
+    }
+    .position-swap-btn:hover { color: #a5b4fc; }
+    .position-clear-btn {
       font-size: 10px; font-weight: 600; color: #475569;
       background: none; border: none; cursor: pointer;
       text-decoration: underline; padding: 0;
     }
-    .position-change-btn:hover { color: #94a3b8; }
+    .position-clear-btn:hover { color: #94a3b8; }
+    .position-swap-picker {
+      margin-top: 8px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap;
+    }
+    .position-swap-picker .position-select {
+      flex: 1; min-width: 0; font-size: 11px;
+    }
     .position-loading {
       display: none; text-align: center; padding: 28px 12px;
       color: #475569; font-size: 12px; font-weight: 600;
@@ -685,7 +700,17 @@
             <div class="pos-stat-value" id="posCurrent">—</div>
           </div>
         </div>
-        <button class="position-change-btn" onclick="clearPositionMatch()">✕ clear / upload manually</button>
+        <div class="position-swap-row">
+          <button class="position-swap-btn" onclick="toggleSwapDropdown()">↕ Wrong match?</button>
+          <button class="position-clear-btn" onclick="clearPositionMatch()">✕ clear</button>
+        </div>
+        <!-- Inline swap: shown when "Wrong match?" is clicked -->
+        <div class="position-swap-picker" id="posSwapPicker" style="display:none;">
+          <select class="position-select" id="positionSwapSelect">
+            <option value="">— pick the correct position —</option>
+          </select>
+          <button class="position-select-btn" onclick="selectFromSwapDropdown()">Use This</button>
+        </div>
       </div>
 
       <!-- Loading state -->
@@ -885,6 +910,35 @@
     showPositionMatch(allPositions[idx]);
   }
 
+  function toggleSwapDropdown() {
+    const picker = document.getElementById('posSwapPicker');
+    const isHidden = picker.style.display === 'none';
+    picker.style.display = isHidden ? 'flex' : 'none';
+    if (isHidden) {
+      // Populate the swap dropdown with all positions
+      const sel = document.getElementById('positionSwapSelect');
+      sel.innerHTML = '<option value="">— pick the correct position —</option>';
+      allPositions.forEach((pos, i) => {
+        const title = posMarketTitle(pos);
+        const outcome = pos.outcome || '';
+        const entryC = pos.avgPrice ? Math.round(pos.avgPrice * 100) + '¢' : '';
+        const label = [title, outcome, entryC].filter(Boolean).join(' · ');
+        const opt = document.createElement('option');
+        opt.value = i;
+        opt.textContent = label || `Position ${i + 1}`;
+        sel.appendChild(opt);
+      });
+    }
+  }
+
+  function selectFromSwapDropdown() {
+    const sel = document.getElementById('positionSwapSelect');
+    const idx = parseInt(sel.value, 10);
+    if (isNaN(idx) || !allPositions[idx]) return;
+    document.getElementById('posSwapPicker').style.display = 'none';
+    showPositionMatch(allPositions[idx]);
+  }
+
   function fuzzyMatchPosition(title) {
     if (!title || !allPositions.length) return null;
     const words = title.toLowerCase().split(/\s+/).filter(w => w.length > 3);
@@ -902,6 +956,9 @@
 
   function showPositionMatch(pos) {
     matchedPosition = pos;
+    // Hide swap picker if open
+    const swapPicker = document.getElementById('posSwapPicker');
+    if (swapPicker) swapPicker.style.display = 'none';
     document.getElementById('posMarket').textContent   = posMarketTitle(pos) || '?';
     const outcomeEl = document.getElementById('posOutcome');
     outcomeEl.textContent = pos.outcome || 'YES';
