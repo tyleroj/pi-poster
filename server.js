@@ -62,25 +62,57 @@ const upload = multer({
 });
 
 // ── Twitter config ────────────────────────────────────────────────────────────
-const TWITTER_CLIENT_ID     = process.env.TWITTER_CLIENT_ID;
-const TWITTER_CLIENT_SECRET = process.env.TWITTER_CLIENT_SECRET;
+const TWITTER_API_KEY    = process.env.TWITTER_CLIENT_ID;      // OAuth 1.0a consumer key
+const TWITTER_API_SECRET = process.env.TWITTER_CLIENT_SECRET;  // OAuth 1.0a consumer secret
 const CALLBACK_URL = process.env.CALLBACK_URL || 'https://evbettors-tweet-tool.onrender.com/auth/twitter/callback';
-const SCOPES = ['tweet.read', 'tweet.write', 'users.read', 'offline.access'];
 
-// ── PKCE helpers ──────────────────────────────────────────────────────────────
-function generateVerifier() {
-  return crypto.randomBytes(32).toString('base64url');
-}
-function generateChallenge(verifier) {
-  return crypto.createHash('sha256').update(verifier).digest('base64url');
+// ── OAuth 1.0a signing ────────────────────────────────────────────────────────
+// userToken/userSecret: the authorized user's tokens (null during request-token step)
+// extraParams: additional params included in signature (e.g. oauth_callback, oauth_verifier)
+function oauth1Header(method, url, userToken, userSecret, extraParams = {}) {
+  const oauthParams = {
+    oauth_consumer_key:     TWITTER_API_KEY,
+    oauth_nonce:            crypto.randomBytes(16).toString('hex'),
+    oauth_signature_method: 'HMAC-SHA1',
+    oauth_timestamp:        Math.floor(Date.now() / 1000).toString(),
+    oauth_version:          '1.0',
+    ...extraParams
+  };
+  if (userToken) oauthParams.oauth_token = userToken;
+
+  const paramStr  = Object.keys(oauthParams).sort()
+    .map(k => `${encodeURIComponent(k)}=${encodeURIComponent(oauthParams[k])}`)
+    .join('&');
+  const baseStr    = `${method.toUpperCase()}&${encodeURIComponent(url)}&${encodeURIComponent(paramStr)}`;
+  const signingKey = `${encodeURIComponent(TWITTER_API_SECRET)}&${userSecret ? encodeURIComponent(userSecret) : ''}`;
+  const signature  = crypto.createHmac('sha1', signingKey).update(baseStr).digest('base64');
+
+  oauthParams.oauth_signature = signature;
+  return 'OAuth ' + Object.keys(oauthParams).sort()
+    .map(k => `${encodeURIComponent(k)}="${encodeURIComponent(oauthParams[k])}"`)
+    .join(', ');
 }
 
-// ── Twitter API helper ────────────────────────────────────────────────────────
-async function twitterFetch(method, endpoint, accessToken, body) {
-  const res = await fetch(`https://api.twitter.com/2${endpoint}`, {
+// ── Token management ──────────────────────────────────────────────────────────
+// Returns { token, secret } — OAuth 1.0a user tokens stored in DB
+function getStoredTokens() {
+  const auth = db.prepare('SELECT * FROM auth WHERE id = 1').get();
+  if (!auth?.access_token || !auth?.refresh_token) {
+    throw new Error('Not connected. Click "Connect Twitter" first.');
+  }
+  return { token: auth.access_token, secret: auth.refresh_token };
+}
+
+// ── Twitter API helper (v2, signed with OAuth 1.0a) ──────────────────────────
+async function twitterFetch(method, endpoint, body) {
+  const { token, secret } = getStoredTokens();
+  const url = `https://api.twitter.com/2${endpoint}`;
+  // JSON bodies are not included in OAuth 1.0a signature base string
+  const authHeader = oauth1Header(method, url, token, secret);
+  const res = await fetch(url, {
     method,
     headers: {
-      Authorization: `Bearer ${accessToken}`,
+      Authorization:  authHeader,
       'Content-Type': 'application/json'
     },
     body: body ? JSON.stringify(body) : undefined
@@ -88,89 +120,15 @@ async function twitterFetch(method, endpoint, accessToken, body) {
   return res;
 }
 
-// ── Token management ──────────────────────────────────────────────────────────
-async function refreshToken() {
-  const auth = db.prepare('SELECT * FROM auth WHERE id = 1').get();
-  if (!auth?.refresh_token) throw new Error('Not authenticated');
-
-  const params = new URLSearchParams({
-    grant_type:    'refresh_token',
-    refresh_token: auth.refresh_token,
-    client_id:     TWITTER_CLIENT_ID
-  });
-  const credentials = Buffer.from(`${TWITTER_CLIENT_ID}:${TWITTER_CLIENT_SECRET}`).toString('base64');
-  const res = await fetch('https://api.twitter.com/2/oauth2/token', {
-    method: 'POST',
-    headers: {
-      'Content-Type':  'application/x-www-form-urlencoded',
-      Authorization:   `Basic ${credentials}`
-    },
-    body: params
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error_description || 'Token refresh failed');
-
-  const expiry = Date.now() + data.expires_in * 1000;
-  db.prepare('UPDATE auth SET access_token=?, refresh_token=?, token_expiry=? WHERE id=1')
-    .run(data.access_token, data.refresh_token || auth.refresh_token, expiry);
-
-  return data.access_token;
-}
-
-async function getAccessToken() {
-  const auth = db.prepare('SELECT * FROM auth WHERE id = 1').get();
-  if (!auth) throw new Error('Not connected. Click "Connect Twitter" first.');
-  if (Date.now() > auth.token_expiry - 60_000) return refreshToken();
-  return auth.access_token;
-}
-
-// ── OAuth 1.0a signing (required for Twitter v1.1 media upload) ───────────────
-function oauth1Header(method, url, bodyParams = {}) {
-  const consumerKey    = process.env.TWITTER_CLIENT_ID;
-  const consumerSecret = process.env.TWITTER_CLIENT_SECRET;
-  const accessToken    = process.env.TWITTER_ACCESS_TOKEN;
-  const accessSecret   = process.env.TWITTER_ACCESS_TOKEN_SECRET;
-
-  if (!accessToken || !accessSecret) {
-    throw new Error('TWITTER_ACCESS_TOKEN / TWITTER_ACCESS_TOKEN_SECRET env vars not set');
-  }
-
-  const oauthParams = {
-    oauth_consumer_key:     consumerKey,
-    oauth_nonce:            crypto.randomBytes(16).toString('hex'),
-    oauth_signature_method: 'HMAC-SHA1',
-    oauth_timestamp:        Math.floor(Date.now() / 1000).toString(),
-    oauth_token:            accessToken,
-    oauth_version:          '1.0'
-  };
-
-  // Combine OAuth params + body params for signing
-  const allParams = { ...oauthParams, ...bodyParams };
-  const paramStr  = Object.keys(allParams).sort()
-    .map(k => `${encodeURIComponent(k)}=${encodeURIComponent(allParams[k])}`)
-    .join('&');
-
-  const baseStr    = `${method.toUpperCase()}&${encodeURIComponent(url)}&${encodeURIComponent(paramStr)}`;
-  const signingKey = `${encodeURIComponent(consumerSecret)}&${encodeURIComponent(accessSecret)}`;
-  const signature  = crypto.createHmac('sha1', signingKey).update(baseStr).digest('base64');
-
-  oauthParams.oauth_signature = signature;
-  const header = 'OAuth ' + Object.keys(oauthParams).sort()
-    .map(k => `${encodeURIComponent(k)}="${encodeURIComponent(oauthParams[k])}"`)
-    .join(', ');
-
-  return header;
-}
-
 // ── Upload media to Twitter v1.1 (OAuth 1.0a required) ───────────────────────
 async function uploadMedia(buffer, mimeType) {
+  const { token, secret } = getStoredTokens();
   const base64   = buffer.toString('base64');
   const category = mimeType.startsWith('image/gif') ? 'tweet_gif' : 'tweet_image';
   const uploadUrl = 'https://upload.twitter.com/1.1/media/upload.json';
 
-  // Body params needed for signing (media_data is too large to sign, per Twitter docs)
-  const signParams = { media_category: category };
-  const authHeader = oauth1Header('POST', uploadUrl, signParams);
+  // Sign with OAuth 1.0a using stored user tokens; media_data excluded from sig (too large)
+  const authHeader = oauth1Header('POST', uploadUrl, token, secret);
 
   const body = new URLSearchParams();
   body.append('media_data',    base64);
@@ -198,8 +156,6 @@ async function uploadMedia(buffer, mimeType) {
 // slipFile / toolFile are optional { buffer, mimetype } objects
 // Returns { tweet1Id, tweet2Id, mediaErrors[] }
 async function postThread(tweet1, tweet2, slipFile, toolFile) {
-  const token = await getAccessToken();
-
   // Upload images if provided (slip → tweet1, tool card → tweet2)
   const tweet1Body = { text: tweet1 };
   const tweet2Body = { text: tweet2 };
@@ -225,85 +181,87 @@ async function postThread(tweet1, tweet2, slipFile, toolFile) {
     }
   }
 
-  const r1 = await twitterFetch('POST', '/tweets', token, tweet1Body);
+  const r1 = await twitterFetch('POST', '/tweets', tweet1Body);
   const d1 = await r1.json();
   if (!r1.ok) throw new Error(d1.detail || d1.title || JSON.stringify(d1));
 
   const tweet1Id = d1.data.id;
 
   tweet2Body.reply = { in_reply_to_tweet_id: tweet1Id };
-  const r2 = await twitterFetch('POST', '/tweets', token, tweet2Body);
+  const r2 = await twitterFetch('POST', '/tweets', tweet2Body);
   const d2 = await r2.json();
   if (!r2.ok) throw new Error(d2.detail || d2.title || JSON.stringify(d2));
 
   return { tweet1Id, tweet2Id: d2.data.id, mediaErrors };
 }
 
-// ── OAuth routes ──────────────────────────────────────────────────────────────
-app.get('/auth/twitter', (req, res) => {
-  const verifier  = generateVerifier();
-  const challenge = generateChallenge(verifier);
-  const state     = crypto.randomBytes(16).toString('hex');
+// ── OAuth 1.0a 3-legged auth routes ──────────────────────────────────────────
+// Step 1: get a request token, redirect user to Twitter to authorize
+app.get('/auth/twitter', async (req, res) => {
+  try {
+    const requestTokenUrl = 'https://api.twitter.com/oauth/request_token';
+    const authHeader = oauth1Header('POST', requestTokenUrl, null, null, {
+      oauth_callback: CALLBACK_URL
+    });
+    const r = await fetch(requestTokenUrl, {
+      method: 'POST',
+      headers: { Authorization: authHeader }
+    });
+    const text = await r.text();
+    if (!r.ok) throw new Error(`Request token failed ${r.status}: ${text}`);
 
-  req.session.codeVerifier = verifier;
-  req.session.oauthState   = state;
+    const p = new URLSearchParams(text);
+    const oauthToken  = p.get('oauth_token');
+    const oauthSecret = p.get('oauth_token_secret');
+    if (!oauthToken) throw new Error('No oauth_token in response: ' + text);
 
-  const params = new URLSearchParams({
-    response_type:         'code',
-    client_id:             TWITTER_CLIENT_ID,
-    redirect_uri:          CALLBACK_URL,
-    scope:                 SCOPES.join(' '),
-    state,
-    code_challenge:        challenge,
-    code_challenge_method: 'S256'
-  });
-  res.redirect(`https://twitter.com/i/oauth2/authorize?${params}`);
+    req.session.requestTokenSecret = oauthSecret;
+    res.redirect(`https://api.twitter.com/oauth/authorize?oauth_token=${oauthToken}`);
+  } catch (err) {
+    console.error('OAuth 1.0a request token error:', err);
+    res.redirect(`/?error=${encodeURIComponent(err.message)}`);
+  }
 });
 
+// Step 2: Twitter redirects back with oauth_token + oauth_verifier
 app.get('/auth/twitter/callback', async (req, res) => {
-  const { code, state, error } = req.query;
-  if (error) return res.redirect(`/?error=${encodeURIComponent(error)}`);
-  if (state !== req.session.oauthState) return res.status(400).send('Invalid state');
+  const { oauth_token, oauth_verifier, denied } = req.query;
+  if (denied) return res.redirect('/?error=auth_denied');
 
   try {
-    const params = new URLSearchParams({
-      grant_type:    'authorization_code',
-      code,
-      redirect_uri:  CALLBACK_URL,
-      code_verifier: req.session.codeVerifier,
-      client_id:     TWITTER_CLIENT_ID
+    const requestSecret  = req.session.requestTokenSecret || '';
+    const accessTokenUrl = 'https://api.twitter.com/oauth/access_token';
+    const authHeader     = oauth1Header('POST', accessTokenUrl, oauth_token, requestSecret, {
+      oauth_verifier
     });
-    const credentials = Buffer.from(`${TWITTER_CLIENT_ID}:${TWITTER_CLIENT_SECRET}`).toString('base64');
-    const res2 = await fetch('https://api.twitter.com/2/oauth2/token', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        Authorization:  `Basic ${credentials}`
-      },
-      body: params
+    const r = await fetch(accessTokenUrl, {
+      method:  'POST',
+      headers: { Authorization: authHeader, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body:    new URLSearchParams({ oauth_verifier })
     });
-    const data = await res2.json();
-    if (!res2.ok) throw new Error(data.error_description || 'Token exchange failed');
+    const text = await r.text();
+    if (!r.ok) throw new Error(`Access token failed ${r.status}: ${text}`);
 
-    const expiry = Date.now() + data.expires_in * 1000;
+    const p              = new URLSearchParams(text);
+    const accessToken    = p.get('oauth_token');
+    const accessSecret   = p.get('oauth_token_secret');
+    const userId         = p.get('user_id')     || 'unknown';
+    const username       = p.get('screen_name') || 'unknown';
 
-    // Fetch user info
-    const userRes  = await twitterFetch('GET', '/users/me', data.access_token);
-    const userData = await userRes.json();
-    const username = userData.data?.username || 'unknown';
-    const userId   = userData.data?.id       || 'unknown';
-
-    const existing = db.prepare('SELECT id FROM auth WHERE id = 1').get();
+    // Reuse existing columns: access_token = oauth_token, refresh_token = oauth_token_secret
+    // token_expiry set far in the future (OAuth 1.0a tokens don't expire)
+    const farFuture = Date.now() + 100 * 365 * 24 * 60 * 60 * 1000;
+    const existing  = db.prepare('SELECT id FROM auth WHERE id = 1').get();
     if (existing) {
       db.prepare('UPDATE auth SET access_token=?,refresh_token=?,token_expiry=?,user_id=?,username=? WHERE id=1')
-        .run(data.access_token, data.refresh_token, expiry, userId, username);
+        .run(accessToken, accessSecret, farFuture, userId, username);
     } else {
       db.prepare('INSERT INTO auth (id,access_token,refresh_token,token_expiry,user_id,username) VALUES (1,?,?,?,?,?)')
-        .run(data.access_token, data.refresh_token, expiry, userId, username);
+        .run(accessToken, accessSecret, farFuture, userId, username);
     }
     res.redirect('/?connected=1');
   } catch (err) {
-    console.error('OAuth error:', err);
+    console.error('OAuth 1.0a callback error:', err);
     res.redirect(`/?error=${encodeURIComponent(err.message)}`);
   }
 });
