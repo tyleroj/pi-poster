@@ -386,10 +386,32 @@
     }
     .position-loading.visible { display: block; }
     .position-none {
-      display: none; text-align: center; padding: 20px 12px;
-      color: #475569; font-size: 12px;
+      display: none; padding: 10px 0 4px;
     }
     .position-none.visible { display: block; }
+    .position-none-label {
+      font-size: 11px; color: #475569; font-weight: 600;
+      margin-bottom: 8px;
+    }
+    .position-select {
+      width: 100%; background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1); border-radius: 10px;
+      color: #e2e8f0; font-size: 12px; font-weight: 600;
+      padding: 9px 12px; outline: none; cursor: pointer;
+      font-family: inherit; margin-bottom: 8px;
+      transition: border-color 0.2s;
+    }
+    .position-select:focus { border-color: rgba(95,255,176,0.45); }
+    .position-select option { background: #0f1420; color: #e2e8f0; }
+    .position-select-btn {
+      width: 100%; background: rgba(95,255,176,0.1);
+      border: 1px solid rgba(95,255,176,0.3); border-radius: 8px;
+      color: #5fffb0; font-size: 12px; font-weight: 700;
+      padding: 8px; cursor: pointer; transition: all 0.15s;
+      font-family: inherit;
+    }
+    .position-select-btn:hover { background: rgba(95,255,176,0.18); }
+    .position-or { font-size: 11px; color: #334155; text-align: center; margin: 8px 0; }
 
     /* ── Winners tab ── */
     .winners-card {
@@ -671,14 +693,20 @@
         <span class="spinner"></span> Matching position...
       </div>
 
-      <!-- No match / manual upload fallback -->
+      <!-- No match / manual picker fallback -->
       <div class="position-none" id="posNone">
-        <div class="upload-zone" id="slipZone" style="display:inline-block;width:100%;">
+        <div class="position-none-label">Pick your position:</div>
+        <select class="position-select" id="positionSelect">
+          <option value="">— loading positions... —</option>
+        </select>
+        <button class="position-select-btn" onclick="selectPositionFromDropdown()">Use This Position</button>
+        <div class="position-or">or upload slip manually below</div>
+        <div class="upload-zone" id="slipZone">
           <input type="file" id="slipInput" accept="image/*" />
           <div class="upload-empty">
             <div class="upload-icon">🧾</div>
             <div class="upload-title">Betting Slip</div>
-            <div class="upload-hint">no match — upload manually</div>
+            <div class="upload-hint">drop or click to browse</div>
           </div>
           <div class="upload-preview" id="slipPreview">
             <img id="slipImg" src="" alt="Slip" />
@@ -817,12 +845,44 @@
   let matchedPosition = null;
   let allPositions = [];
 
-  // Fetch all positions once on load
+  // Get the market title from a position object (try multiple field names)
+  function posMarketTitle(pos) {
+    return pos.market || pos.title || pos.question || pos.marketName || pos.name || '';
+  }
+
+  // Fetch all positions and populate dropdown
   async function fetchPositions() {
     try {
       const data = await fetch('/api/positions').then(r => r.json());
-      if (Array.isArray(data)) allPositions = data;
+      if (Array.isArray(data)) {
+        allPositions = data;
+        populatePositionDropdown();
+      }
     } catch (e) { /* silent */ }
+  }
+
+  function populatePositionDropdown() {
+    const sel = document.getElementById('positionSelect');
+    if (!sel) return;
+    sel.innerHTML = '<option value="">— select your position —</option>';
+    allPositions.forEach((pos, i) => {
+      const title = posMarketTitle(pos);
+      const outcome = pos.outcome || '';
+      const entryC = pos.avgPrice ? Math.round(pos.avgPrice * 100) + '¢' : '';
+      const label = [title, outcome, entryC].filter(Boolean).join(' · ');
+      const opt = document.createElement('option');
+      opt.value = i;
+      opt.textContent = label || `Position ${i + 1}`;
+      sel.appendChild(opt);
+    });
+    if (!allPositions.length) sel.innerHTML = '<option value="">— no open positions found —</option>';
+  }
+
+  function selectPositionFromDropdown() {
+    const sel = document.getElementById('positionSelect');
+    const idx = parseInt(sel.value, 10);
+    if (isNaN(idx) || !allPositions[idx]) return;
+    showPositionMatch(allPositions[idx]);
   }
 
   function fuzzyMatchPosition(title) {
@@ -831,17 +891,18 @@
     if (!words.length) return null;
     let best = null, bestScore = 0;
     allPositions.forEach(pos => {
-      const market = (pos.market || pos.title || '').toLowerCase();
+      // Try all possible title fields
+      const market = posMarketTitle(pos).toLowerCase();
       const hits = words.filter(w => market.includes(w)).length;
       const score = hits / words.length;
-      if (score > bestScore && score >= 0.4) { bestScore = score; best = pos; }
+      if (score > bestScore && score >= 0.3) { bestScore = score; best = pos; }
     });
     return best;
   }
 
   function showPositionMatch(pos) {
     matchedPosition = pos;
-    document.getElementById('posMarket').textContent   = pos.market || pos.title || '?';
+    document.getElementById('posMarket').textContent   = posMarketTitle(pos) || '?';
     const outcomeEl = document.getElementById('posOutcome');
     outcomeEl.textContent = pos.outcome || 'YES';
     outcomeEl.className = 'position-outcome' + (pos.outcome?.toUpperCase() === 'NO' ? ' no' : '');
@@ -859,12 +920,14 @@
     document.getElementById('positionCard').classList.remove('visible');
     document.getElementById('posLoading').classList.remove('visible');
     document.getElementById('posNone').classList.add('visible');
+    populatePositionDropdown(); // ensure dropdown is up to date
   }
 
   function clearPositionMatch() {
     matchedPosition = null;
     document.getElementById('positionCard').classList.remove('visible');
     document.getElementById('posNone').classList.add('visible');
+    populatePositionDropdown();
   }
 
   async function tryMatchPosition(imageFile) {
@@ -1229,7 +1292,7 @@
         body: JSON.stringify({
           tweet1, tweet2,
           condition_id:  matchedPosition?.conditionId || matchedPosition?.condition_id || null,
-          market_title:  matchedPosition?.market || matchedPosition?.title || null
+          market_title:  matchedPosition ? posMarketTitle(matchedPosition) : null
         })
       }).then(r => r.json());
       if (data.error) throw new Error(data.error);
@@ -1256,7 +1319,7 @@
         body: JSON.stringify({
           tweet1, tweet2,
           condition_id: matchedPosition?.conditionId || matchedPosition?.condition_id || null,
-          market_title: matchedPosition?.market || matchedPosition?.title || null
+          market_title: matchedPosition ? posMarketTitle(matchedPosition) : null
         })
       }).then(r => r.json());
       if (data.error) throw new Error(data.error);
