@@ -1138,7 +1138,6 @@
       if (label) fd.append('label', label);
       const style = document.querySelector('.style-btn.active')?.dataset.style || '';
       if (style) fd.append('style', style);
-      if (matchedPosition) fd.append('positionData', JSON.stringify(matchedPosition));
 
       const data = await fetch('/generate', { method: 'POST', body: fd }).then(r => r.json());
       if (data.error) throw new Error(data.error);
@@ -1228,8 +1227,8 @@
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           tweet1, tweet2,
-          condition_id: matchedPosition?.conditionId || matchedPosition?.condition_id || null,
-          market_title: matchedPosition ? posMarketTitle(matchedPosition) : null
+          market_title: generatedMarketTitle || null,
+          entry_price:  generatedEntryPrice  || null
         })
       }).then(r => r.json());
       if (data.error) throw new Error(data.error);

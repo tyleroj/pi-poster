@@ -692,7 +692,7 @@ app.post('/post/now', upload.fields([
 // ── Queue routes ──────────────────────────────────────────────────────────────
 app.post('/queue/add', async (req, res) => {
   try {
-    const { tweet1, tweet2, condition_id, market_title } = req.body;
+    const { tweet1, tweet2, market_title, entry_price } = req.body;
     if (!tweet1 || !tweet2) return res.status(400).json({ error: 'Both tweets required' });
 
     // Schedule 15-20 min after the latest pending item (or from now if queue empty)
@@ -701,8 +701,8 @@ app.post('/queue/add', async (req, res) => {
     const delay  = (15 + Math.floor(Math.random() * 6)) * 60 * 1000;
     const scheduledAt = base + delay;
 
-    const info = db.prepare('INSERT INTO queue (tweet1, tweet2, scheduled_at, condition_id, market_title) VALUES (?,?,?,?,?)')
-      .run(tweet1, tweet2, scheduledAt, condition_id || null, market_title || null);
+    const info = db.prepare('INSERT INTO queue (tweet1, tweet2, scheduled_at, market_title, entry_price) VALUES (?,?,?,?,?)')
+      .run(tweet1, tweet2, scheduledAt, market_title || null, entry_price ? parseInt(entry_price, 10) : null);
 
     res.json({ success: true, id: info.lastInsertRowid, scheduledAt });
   } catch (err) {
