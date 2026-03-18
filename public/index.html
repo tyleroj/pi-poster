@@ -1392,14 +1392,17 @@
     const btn = document.getElementById('postNowBtn');
     btn.disabled = true; btn.textContent = 'Posting...';
     try {
-      const data = await fetch('/post/now', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tweet1, tweet2,
-          condition_id:  matchedPosition?.conditionId || matchedPosition?.condition_id || null,
-          market_title:  matchedPosition ? posMarketTitle(matchedPosition) : null
-        })
-      }).then(r => r.json());
+      const fd = new FormData();
+      fd.append('tweet1', tweet1);
+      fd.append('tweet2', tweet2);
+      fd.append('condition_id', matchedPosition?.conditionId || matchedPosition?.condition_id || '');
+      fd.append('market_title', matchedPosition ? posMarketTitle(matchedPosition) : '');
+      const slipFile = document.getElementById('slipInput').files[0];
+      const toolFile = document.getElementById('toolInput').files[0];
+      if (slipFile) fd.append('slip', slipFile);
+      if (toolFile) fd.append('toolCard', toolFile);
+
+      const data = await fetch('/post/now', { method: 'POST', body: fd }).then(r => r.json());
       if (data.error) throw new Error(data.error);
       showToast('Thread posted! 🎉', 'success');
     } catch (err) {

@@ -123,20 +123,56 @@ async function getAccessToken() {
   return auth.access_token;
 }
 
+// ── Upload media to Twitter v1.1 ──────────────────────────────────────────────
+async function uploadMedia(buffer, mimeType, accessToken) {
+  const FormDataNode = require('form-data');
+  const form = new FormDataNode();
+  form.append('media', buffer, { filename: 'image', contentType: mimeType });
+
+  const res = await fetch('https://upload.twitter.com/1.1/media/upload.json', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      ...form.getHeaders()
+    },
+    body: form
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error('Media upload failed: ' + JSON.stringify(data));
+  return data.media_id_string;
+}
+
 // ── Post a thread ─────────────────────────────────────────────────────────────
-async function postThread(tweet1, tweet2) {
+// slipFile / toolFile are optional { buffer, mimetype } objects
+async function postThread(tweet1, tweet2, slipFile, toolFile) {
   const token = await getAccessToken();
 
-  const r1 = await twitterFetch('POST', '/tweets', token, { text: tweet1 });
+  // Upload images if provided (slip → tweet1, tool card → tweet2)
+  const tweet1Body = { text: tweet1 };
+  const tweet2Body = { text: tweet2 };
+
+  if (slipFile?.buffer) {
+    try {
+      const mediaId = await uploadMedia(slipFile.buffer, slipFile.mimetype, token);
+      tweet1Body.media = { media_ids: [mediaId] };
+    } catch (e) { console.warn('Slip upload failed:', e.message); }
+  }
+
+  if (toolFile?.buffer) {
+    try {
+      const mediaId = await uploadMedia(toolFile.buffer, toolFile.mimetype, token);
+      tweet2Body.media = { media_ids: [mediaId] };
+    } catch (e) { console.warn('Tool card upload failed:', e.message); }
+  }
+
+  const r1 = await twitterFetch('POST', '/tweets', token, tweet1Body);
   const d1 = await r1.json();
   if (!r1.ok) throw new Error(d1.detail || d1.title || JSON.stringify(d1));
 
   const tweet1Id = d1.data.id;
 
-  const r2 = await twitterFetch('POST', '/tweets', token, {
-    text: tweet2,
-    reply: { in_reply_to_tweet_id: tweet1Id }
-  });
+  tweet2Body.reply = { in_reply_to_tweet_id: tweet1Id };
+  const r2 = await twitterFetch('POST', '/tweets', token, tweet2Body);
   const d2 = await r2.json();
   if (!r2.ok) throw new Error(d2.detail || d2.title || JSON.stringify(d2));
 
@@ -594,11 +630,18 @@ app.post('/generate', upload.fields([
 });
 
 // ── Post now ──────────────────────────────────────────────────────────────────
-app.post('/post/now', async (req, res) => {
+app.post('/post/now', upload.fields([
+  { name: 'slip',     maxCount: 1 },
+  { name: 'toolCard', maxCount: 1 }
+]), async (req, res) => {
   try {
     const { tweet1, tweet2, condition_id, market_title } = req.body;
     if (!tweet1 || !tweet2) return res.status(400).json({ error: 'Both tweets required' });
-    const result = await postThread(tweet1, tweet2);
+
+    const slipFile  = req.files?.['slip']?.[0]     || null;
+    const toolFile  = req.files?.['toolCard']?.[0] || null;
+
+    const result = await postThread(tweet1, tweet2, slipFile, toolFile);
     // Save to history so the Winners tab can track it
     db.prepare(`INSERT INTO queue (tweet1, tweet2, scheduled_at, status, posted_at, tweet1_id, tweet2_id, condition_id, market_title)
                 VALUES (?,?,?,?,?,?,?,?,?)`)
