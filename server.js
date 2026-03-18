@@ -435,4 +435,7 @@ async function processQueue() {
 }
 setInterval(processQueue, 60_000);
 
+// Health check endpoint (for uptime monitors like UptimeRobot)
+app.get('/health', (req, res) => res.json({ status: 'ok', ts: Date.now() }));
+
 app.listen(PORT, () => console.log(`PI Poster running on port ${PORT}`));
