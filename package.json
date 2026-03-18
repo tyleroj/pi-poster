@@ -1,0 +1,16 @@
+{
+  "name": "pi-poster",
+  "version": "1.0.0",
+  "description": "Prediction Insiders personal tweet poster with queue and scheduling",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.78.0",
+    "better-sqlite3": "^9.4.3",
+    "express": "^5.2.1",
+    "express-session": "^1.18.0",
+    "multer": "^2.1.1"
+  }
+}
