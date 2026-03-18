@@ -257,6 +257,18 @@
       font-size: 11px; font-weight: 600; color: #475569;
       text-transform: uppercase; letter-spacing: 0.6px;
     }
+    .bold-btn {
+      margin-left: auto;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.09);
+      border-radius: 6px; color: #64748b;
+      font-size: 12px; font-weight: 800;
+      padding: 2px 9px; cursor: pointer;
+      transition: all 0.15s; line-height: 1.6;
+      font-family: inherit; letter-spacing: -0.3px;
+    }
+    .bold-btn:hover { border-color: rgba(95,255,176,0.45); color: #5fffb0; background: rgba(95,255,176,0.07); }
+    .bold-btn:active { transform: scale(0.94); }
 
     .tweet-textarea {
       width: 100%; background: transparent;
@@ -520,6 +532,7 @@
       <div class="tweet-meta">
         <span class="tweet-handle" id="tweetHandle">@you</span>
         <span class="tweet-num">Tweet 1 · Hook</span>
+        <button class="bold-btn" onclick="applyBold('tweet1')" title="Bold (⌘B)"><b>B</b></button>
       </div>
       <textarea class="tweet-textarea" id="tweet1" placeholder="What's happening?" oninput="autoResize(this)"></textarea>
       <div class="tweet-image" id="tweetImg1">
@@ -537,6 +550,7 @@
       <div class="tweet-meta">
         <span class="tweet-handle" id="tweetHandle2">@you</span>
         <span class="tweet-num">Tweet 2 · Breakdown</span>
+        <button class="bold-btn" onclick="applyBold('tweet2')" title="Bold (⌘B)"><b>B</b></button>
       </div>
       <textarea class="tweet-textarea" id="tweet2" placeholder="Continue the thread..." oninput="autoResize(this)"></textarea>
       <div class="tweet-image" id="tweetImg2">
@@ -564,6 +578,53 @@
 </div>
 
 <script>
+  // ── Unicode bold (renders as bold on Twitter) ──────────────────────────────
+  const BOLD_MAP = (() => {
+    const map = {};
+    const ranges = [
+      ['A', 26, 0x1D5D4], // A-Z sans-serif bold
+      ['a', 26, 0x1D5EE], // a-z sans-serif bold
+      ['0', 10, 0x1D7EC]  // 0-9 sans-serif bold
+    ];
+    ranges.forEach(([start, count, base]) => {
+      for (let i = 0; i < count; i++) {
+        map[String.fromCharCode(start.charCodeAt(0) + i)] = String.fromCodePoint(base + i);
+      }
+    });
+    return map;
+  })();
+
+  function toBold(text) {
+    return [...text].map(ch => BOLD_MAP[ch] || ch).join('');
+  }
+
+  function applyBold(id) {
+    const ta = document.getElementById(id);
+    const start = ta.selectionStart;
+    const end   = ta.selectionEnd;
+    if (start === end) return; // nothing selected
+    const before  = ta.value.slice(0, start);
+    const selected = ta.value.slice(start, end);
+    const after   = ta.value.slice(end);
+    const bolded  = toBold(selected);
+    ta.value = before + bolded + after;
+    // Restore selection over bolded text (Unicode bold chars may be multi-byte)
+    ta.setSelectionRange(start, start + [...bolded].length);
+    ta.focus();
+    autoResize(ta);
+  }
+
+  // Cmd+B / Ctrl+B on tweet textareas
+  document.addEventListener('keydown', e => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'b') {
+      const active = document.activeElement;
+      if (active && active.classList.contains('tweet-textarea')) {
+        e.preventDefault();
+        applyBold(active.id);
+      }
+    }
+  });
+
   // ── Toast ──────────────────────────────────────────────────────────────────
   let toastTimer;
   function showToast(msg, type = 'success') {
