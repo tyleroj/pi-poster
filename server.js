@@ -34,9 +34,16 @@ db.exec(`
     tweet1_id    TEXT,
     tweet2_id    TEXT,
     error        TEXT,
-    created_at   INTEGER DEFAULT (unixepoch())
+    created_at   INTEGER DEFAULT (unixepoch()),
+    condition_id TEXT,
+    market_title TEXT
   );
 `);
+
+// Migrate existing queue table if columns missing
+const qCols = db.prepare('PRAGMA table_info(queue)').all().map(c => c.name);
+if (!qCols.includes('condition_id')) db.exec('ALTER TABLE queue ADD COLUMN condition_id TEXT');
+if (!qCols.includes('market_title'))  db.exec('ALTER TABLE queue ADD COLUMN market_title TEXT');
 
 // ── Middleware ────────────────────────────────────────────────────────────────
 app.use(express.static('public'));
@@ -215,6 +222,135 @@ app.post('/auth/disconnect', (req, res) => {
   res.json({ success: true });
 });
 
+// ── Polymarket ────────────────────────────────────────────────────────────────
+const POLYMARKET_ADDRESS = '0x691A3a1919F2eE338b10FD2F216dF525da34D113';
+
+// Fetch all positions for the wallet
+app.get('/api/positions', async (req, res) => {
+  try {
+    const r = await fetch(
+      `https://data-api.polymarket.com/positions?user=${POLYMARKET_ADDRESS}&sizeThreshold=0`
+    );
+    const data = await r.json();
+    res.json(Array.isArray(data) ? data : []);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Extract market title from tool card image (fast haiku call)
+app.post('/api/extract-market', upload.single('toolCard'), async (req, res) => {
+  try {
+    const file = req.file;
+    if (!file) return res.status(400).json({ error: 'No image' });
+    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    const msg = await client.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 150,
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'image', source: { type: 'base64', media_type: file.mimetype, data: file.buffer.toString('base64') } },
+          { type: 'text', text: 'What is the prediction market question/title shown in this screenshot? Return ONLY the market title text, nothing else. No quotes, no explanation.' }
+        ]
+      }]
+    });
+    res.json({ title: msg.content[0].text.trim() });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Generate a Quote Tweet for a resolved winning position
+app.post('/generate-qt', async (req, res) => {
+  try {
+    const { originalTweet, marketTitle, entryPrice, cashPaidOut, payout } = req.body;
+    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    const payoutStr = cashPaidOut || payout;
+    const msg = await client.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 350,
+      temperature: 1,
+      messages: [{
+        role: 'user',
+        content: `Write a Quote Tweet celebrating this winning Polymarket prediction that just resolved YES at 100c.
+
+Original tweet that called the play:
+"${originalTweet}"
+
+Result:
+- Market: ${marketTitle}
+- Resolved YES at 100c (full settlement)
+- Entry price: ~${entryPrice}c
+${payoutStr ? `- Payout: $${Number(payoutStr).toFixed(2)}` : ''}
+
+Hard requirements:
+- Under 240 characters total
+- NEVER use em dashes (the — character)
+- No "I told you so" tone — just clean confidence
+- No dramatic one-word sentences like "Called." or "Win."
+- No motivational poster phrasing
+- Reference that this was a Prediction Insiders signal
+- Naturally include oddsjam.com/prediction/insiders
+- No standalone CTA sentence
+
+Return ONLY the QT text, nothing else.`
+      }]
+    });
+    res.json({ qt: msg.content[0].text.trim() });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Winners: posted tweets cross-referenced with resolved Polymarket positions
+app.get('/api/winners', async (req, res) => {
+  try {
+    const posted = db.prepare(`
+      SELECT * FROM queue
+      WHERE status = 'posted'
+      ORDER BY posted_at DESC LIMIT 100
+    `).all();
+
+    // Fetch all positions (open + resolved) from Polymarket
+    let positions = [];
+    try {
+      const r = await fetch(
+        `https://data-api.polymarket.com/positions?user=${POLYMARKET_ADDRESS}&sizeThreshold=0`
+      );
+      const d = await r.json();
+      if (Array.isArray(d)) positions = d;
+    } catch (e) { /* continue without position data */ }
+
+    const posMap = {};
+    positions.forEach(p => {
+      const key = p.conditionId || p.condition_id;
+      if (key) posMap[key] = p;
+    });
+
+    const annotated = posted.map(item => {
+      const pos = item.condition_id ? (posMap[item.condition_id] || null) : null;
+      let won = false;
+      if (pos) {
+        // Won = redeemed with payout OR current value ≥ 99% of shares (settled at 100c)
+        if (pos.redeemed && pos.cashPaidOut > 0) won = true;
+        else if (pos.size > 0 && pos.currentValue >= pos.size * 0.99) won = true;
+        else if (pos.winnings > 0) won = true;
+      }
+      return { ...item, position: pos, won };
+    });
+
+    annotated.sort((a, b) => {
+      if (a.won !== b.won) return a.won ? -1 : 1;
+      return (b.posted_at || 0) - (a.posted_at || 0);
+    });
+
+    res.json(annotated);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── AI generation ─────────────────────────────────────────────────────────────
 const VIDEO_URL = 'https://youtu.be/1BmHOrxIET4';
 
@@ -387,6 +523,7 @@ app.post('/generate', upload.fields([
     const slipFile    = req.files['slip']?.[0];
     const customLabel = req.body.label || '';
     const style       = req.body.style || '';
+    const positionData = req.body.positionData ? (() => { try { return JSON.parse(req.body.positionData); } catch { return null; } })() : null;
 
     if (!toolFile) return res.status(400).json({ error: 'Tool card screenshot is required.' });
 
@@ -397,6 +534,23 @@ app.post('/generate', upload.fields([
     if (slipFile) {
       content.push({ type: 'text', text: 'Here is the Polymarket betting slip screenshot:' });
       content.push({ type: 'image', source: { type: 'base64', media_type: slipFile.mimetype, data: slipFile.buffer.toString('base64') } });
+    }
+
+    // Inject matched Polymarket position as structured text context
+    if (positionData) {
+      const entryC  = positionData.avgPrice ? Math.round(positionData.avgPrice * 100) : '?';
+      const initVal = positionData.initialValue?.toFixed(2) ?? '?';
+      const curVal  = positionData.currentValue?.toFixed(2)  ?? '?';
+      const shares  = positionData.size?.toFixed(1)          ?? '?';
+      content.push({
+        type: 'text',
+        text: `User's Polymarket position (matched automatically from the tool card):\n` +
+              `Market: ${positionData.market || positionData.title || '?'}\n` +
+              `Outcome: ${positionData.outcome || '?'}\n` +
+              `Avg entry price: ~${entryC}¢\n` +
+              `Position size: $${initVal} (${shares} shares)\n` +
+              `Current value: $${curVal}`
+      });
     }
 
     const labelText = customLabel ? `\n\nCustom label to use in Tweet 1: "${customLabel}"` : '';
@@ -423,9 +577,15 @@ app.post('/generate', upload.fields([
 // ── Post now ──────────────────────────────────────────────────────────────────
 app.post('/post/now', async (req, res) => {
   try {
-    const { tweet1, tweet2 } = req.body;
+    const { tweet1, tweet2, condition_id, market_title } = req.body;
     if (!tweet1 || !tweet2) return res.status(400).json({ error: 'Both tweets required' });
     const result = await postThread(tweet1, tweet2);
+    // Save to history so the Winners tab can track it
+    db.prepare(`INSERT INTO queue (tweet1, tweet2, scheduled_at, status, posted_at, tweet1_id, tweet2_id, condition_id, market_title)
+                VALUES (?,?,?,?,?,?,?,?,?)`)
+      .run(tweet1, tweet2, Date.now(), 'posted', Date.now(),
+           result.tweet1Id, result.tweet2Id,
+           condition_id || null, market_title || null);
     res.json({ success: true, ...result });
   } catch (err) {
     console.error('Post error:', err);
@@ -436,7 +596,7 @@ app.post('/post/now', async (req, res) => {
 // ── Queue routes ──────────────────────────────────────────────────────────────
 app.post('/queue/add', async (req, res) => {
   try {
-    const { tweet1, tweet2 } = req.body;
+    const { tweet1, tweet2, condition_id, market_title } = req.body;
     if (!tweet1 || !tweet2) return res.status(400).json({ error: 'Both tweets required' });
 
     // Schedule 15-20 min after the latest pending item (or from now if queue empty)
@@ -445,8 +605,8 @@ app.post('/queue/add', async (req, res) => {
     const delay  = (15 + Math.floor(Math.random() * 6)) * 60 * 1000;
     const scheduledAt = base + delay;
 
-    const info = db.prepare('INSERT INTO queue (tweet1, tweet2, scheduled_at) VALUES (?,?,?)')
-      .run(tweet1, tweet2, scheduledAt);
+    const info = db.prepare('INSERT INTO queue (tweet1, tweet2, scheduled_at, condition_id, market_title) VALUES (?,?,?,?,?)')
+      .run(tweet1, tweet2, scheduledAt, condition_id || null, market_title || null);
 
     res.json({ success: true, id: info.lastInsertRowid, scheduledAt });
   } catch (err) {

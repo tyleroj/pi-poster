@@ -330,6 +330,163 @@
     }
     .regen-btn:hover { border-color: rgba(255,255,255,0.18); color: #94a3b8; }
 
+    /* ── Tab nav ── */
+    .tab-nav {
+      width: 100%; max-width: 640px;
+      display: flex; gap: 4px; padding: 6px;
+      margin-bottom: 16px;
+    }
+    .tab-btn {
+      flex: 1; background: transparent;
+      border: none; border-radius: 10px;
+      color: #475569; font-size: 13px; font-weight: 700;
+      padding: 9px 16px; cursor: pointer;
+      transition: all 0.15s; letter-spacing: -0.1px;
+    }
+    .tab-btn:hover { color: #94a3b8; background: rgba(255,255,255,0.04); }
+    .tab-btn.active { background: rgba(255,255,255,0.08); color: #fff; }
+
+    /* ── Position matched card (replaces slip zone when matched) ── */
+    .position-card {
+      border: 1.5px solid rgba(95,255,176,0.3); border-radius: 12px;
+      background: rgba(95,255,176,0.04); padding: 14px 16px;
+      display: none; position: relative;
+    }
+    .position-card.visible { display: block; }
+    .position-card-header {
+      display: flex; align-items: flex-start; justify-content: space-between;
+      gap: 8px; margin-bottom: 10px;
+    }
+    .position-market {
+      font-size: 12px; font-weight: 600; color: #e2e8f0;
+      line-height: 1.4; flex: 1;
+    }
+    .position-outcome {
+      font-size: 11px; font-weight: 800; padding: 3px 8px;
+      border-radius: 5px; flex-shrink: 0;
+      background: rgba(95,255,176,0.15); color: #5fffb0;
+    }
+    .position-outcome.no { background: rgba(248,113,113,0.15); color: #f87171; }
+    .position-stats {
+      display: grid; grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px; margin-bottom: 8px;
+    }
+    .pos-stat { text-align: center; }
+    .pos-stat-label { font-size: 10px; color: #475569; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+    .pos-stat-value { font-size: 13px; color: #e2e8f0; font-weight: 700; margin-top: 2px; }
+    .position-change-btn {
+      font-size: 10px; font-weight: 600; color: #475569;
+      background: none; border: none; cursor: pointer;
+      text-decoration: underline; padding: 0;
+    }
+    .position-change-btn:hover { color: #94a3b8; }
+    .position-loading {
+      display: none; text-align: center; padding: 28px 12px;
+      color: #475569; font-size: 12px; font-weight: 600;
+    }
+    .position-loading.visible { display: block; }
+    .position-none {
+      display: none; text-align: center; padding: 20px 12px;
+      color: #475569; font-size: 12px;
+    }
+    .position-none.visible { display: block; }
+
+    /* ── Winners tab ── */
+    .winners-card {
+      width: 100%; max-width: 640px;
+      padding: 22px; margin-bottom: 16px;
+    }
+    .winners-header {
+      display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px;
+    }
+    .winners-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #475569; }
+
+    .winner-item {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 14px; padding: 16px; margin-bottom: 10px;
+      transition: border-color 0.2s;
+    }
+    .winner-item:hover { border-color: rgba(255,255,255,0.1); }
+    .winner-item.won { border-color: rgba(95,255,176,0.25); background: rgba(95,255,176,0.03); }
+
+    .winner-item-header {
+      display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;
+    }
+    .winner-date { font-size: 12px; color: #475569; font-weight: 600; }
+    .winner-badge {
+      font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 20px;
+      background: rgba(95,255,176,0.15); color: #5fffb0;
+    }
+    .winner-market {
+      font-size: 12px; color: #64748b; font-weight: 600; margin-bottom: 8px;
+      font-style: italic;
+    }
+    .winner-tweet-preview {
+      font-size: 13px; color: #94a3b8; line-height: 1.55;
+      white-space: pre-wrap; margin-bottom: 12px;
+      display: -webkit-box; -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical; overflow: hidden;
+    }
+    .winner-actions { display: flex; gap: 6px; }
+    .qt-btn {
+      background: linear-gradient(135deg, #5fffb0 0%, #3dd68c 100%);
+      border: none; border-radius: 8px; color: #060810;
+      font-size: 12px; font-weight: 700; padding: 7px 16px;
+      cursor: pointer; transition: opacity 0.15s;
+    }
+    .qt-btn:hover { opacity: 0.85; }
+    .winners-empty { text-align: center; color: #334155; font-size: 13px; padding: 40px 0; }
+
+    /* ── QT modal ── */
+    .qt-modal-bg {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.75); backdrop-filter: blur(6px);
+      z-index: 200; align-items: center; justify-content: center; padding: 20px;
+    }
+    .qt-modal-bg.open { display: flex; }
+    .qt-modal {
+      background: rgba(18,22,32,0.97);
+      border: 1px solid rgba(255,255,255,0.1);
+      backdrop-filter: blur(32px);
+      border-radius: 18px; padding: 26px;
+      width: 100%; max-width: 560px;
+    }
+    .qt-modal-title { font-size: 16px; font-weight: 700; color: #fff; margin-bottom: 6px; }
+    .qt-modal-sub { font-size: 12px; color: #475569; margin-bottom: 18px; }
+    .qt-original {
+      background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 10px; padding: 12px 14px; font-size: 12px; color: #64748b;
+      line-height: 1.55; white-space: pre-wrap; margin-bottom: 16px;
+      display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+    }
+    .qt-loading { text-align: center; padding: 20px; color: #64748b; font-size: 13px; display: none; }
+    .qt-result {
+      width: 100%; background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 10px; color: #e2e8f0; font-size: 14px;
+      line-height: 1.65; padding: 12px 14px; outline: none;
+      resize: vertical; min-height: 80px; font-family: inherit;
+      transition: border-color 0.2s; display: none; margin-bottom: 14px;
+    }
+    .qt-result:focus { border-color: rgba(95,255,176,0.45); }
+    .qt-modal-actions { display: flex; gap: 8px; }
+    .qt-queue-btn {
+      flex: 1; background: linear-gradient(135deg, #5fffb0 0%, #3dd68c 100%);
+      border: none; border-radius: 10px; color: #060810;
+      font-size: 14px; font-weight: 700; padding: 11px; cursor: pointer;
+      display: none;
+    }
+    .qt-queue-btn:hover { opacity: 0.9; }
+    .qt-cancel-btn {
+      flex: 1; background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 10px; color: #64748b;
+      font-size: 14px; font-weight: 600; padding: 11px; cursor: pointer;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .qt-cancel-btn:hover { border-color: rgba(255,255,255,0.18); color: #94a3b8; }
+
     /* ── Queue panel ── */
     .queue-card {
       width: 100%; max-width: 640px;
@@ -454,24 +611,80 @@
   </div>
 </div>
 
+<!-- QT modal -->
+<div class="qt-modal-bg" id="qtModalBg">
+  <div class="qt-modal">
+    <div class="qt-modal-title">Generate Quote Tweet</div>
+    <div class="qt-modal-sub" id="qtModalMarket"></div>
+    <div class="qt-original" id="qtOriginalPreview"></div>
+    <div class="qt-loading" id="qtLoading"><span class="spinner"></span> Writing QT...</div>
+    <textarea class="qt-result" id="qtResultText" placeholder="QT will appear here..."></textarea>
+    <div class="qt-modal-actions">
+      <button class="qt-cancel-btn" onclick="closeQtModal()">Cancel</button>
+      <button class="qt-queue-btn" id="qtQueueBtn" onclick="queueQT()">Add QT to Queue</button>
+    </div>
+  </div>
+</div>
+
+<!-- Tab navigation -->
+<div class="tab-nav glass">
+  <button class="tab-btn active" id="tabBtnGenerate" onclick="switchTab('generate')">⚡ Generate</button>
+  <button class="tab-btn" id="tabBtnWinners" onclick="switchTab('winners')">🏆 Winners</button>
+</div>
+
+<!-- Generate tab -->
+<div id="tabGenerate">
+
 <!-- Generator card -->
 <div class="main-card glass">
   <div class="section-title">Generate Thread</div>
 
   <div class="upload-row">
     <div>
-      <div class="upload-label">Betting Slip <span class="badge">Optional</span></div>
-      <div class="upload-zone" id="slipZone">
-        <input type="file" id="slipInput" accept="image/*" />
-        <div class="upload-empty">
-          <div class="upload-icon">🧾</div>
-          <div class="upload-title">Betting Slip</div>
-          <div class="upload-hint">drop or click to browse</div>
+      <div class="upload-label">Betting Slip <span class="badge">Auto</span></div>
+
+      <!-- Position matched state -->
+      <div class="position-card" id="positionCard">
+        <div class="position-card-header">
+          <div class="position-market" id="posMarket">—</div>
+          <div class="position-outcome" id="posOutcome">YES</div>
         </div>
-        <div class="upload-preview" id="slipPreview">
-          <img id="slipImg" src="" alt="Slip" />
-          <div class="preview-actions">
-            <button class="preview-btn" onclick="event.stopPropagation(); document.getElementById('slipInput').click()">Change</button>
+        <div class="position-stats">
+          <div class="pos-stat">
+            <div class="pos-stat-label">Entry</div>
+            <div class="pos-stat-value" id="posEntry">—</div>
+          </div>
+          <div class="pos-stat">
+            <div class="pos-stat-label">Size</div>
+            <div class="pos-stat-value" id="posSize">—</div>
+          </div>
+          <div class="pos-stat">
+            <div class="pos-stat-label">Current</div>
+            <div class="pos-stat-value" id="posCurrent">—</div>
+          </div>
+        </div>
+        <button class="position-change-btn" onclick="clearPositionMatch()">✕ clear / upload manually</button>
+      </div>
+
+      <!-- Loading state -->
+      <div class="position-loading" id="posLoading">
+        <span class="spinner"></span> Matching position...
+      </div>
+
+      <!-- No match / manual upload fallback -->
+      <div class="position-none" id="posNone">
+        <div class="upload-zone" id="slipZone" style="display:inline-block;width:100%;">
+          <input type="file" id="slipInput" accept="image/*" />
+          <div class="upload-empty">
+            <div class="upload-icon">🧾</div>
+            <div class="upload-title">Betting Slip</div>
+            <div class="upload-hint">no match — upload manually</div>
+          </div>
+          <div class="upload-preview" id="slipPreview">
+            <img id="slipImg" src="" alt="Slip" />
+            <div class="preview-actions">
+              <button class="preview-btn" onclick="event.stopPropagation(); document.getElementById('slipInput').click()">Change</button>
+            </div>
           </div>
         </div>
       </div>
@@ -577,7 +790,226 @@
   <div id="queueList"><div class="queue-empty">Queue is empty</div></div>
 </div>
 
+</div><!-- end tabGenerate -->
+
+<!-- Winners tab -->
+<div id="tabWinners" style="display:none;">
+<div class="glass winners-card">
+  <div class="winners-header">
+    <span class="winners-title">🏆 Winning Slips</span>
+    <button class="refresh-btn" onclick="loadWinners()">↺ Refresh</button>
+  </div>
+  <div id="winnersList"><div class="winners-empty">Loading...</div></div>
+</div>
+</div><!-- end tabWinners -->
+
 <script>
+  // ── Tabs ──────────────────────────────────────────────────────────────────
+  function switchTab(tab) {
+    document.getElementById('tabGenerate').style.display = tab === 'generate' ? '' : 'none';
+    document.getElementById('tabWinners').style.display  = tab === 'winners'  ? '' : 'none';
+    document.getElementById('tabBtnGenerate').classList.toggle('active', tab === 'generate');
+    document.getElementById('tabBtnWinners').classList.toggle('active',  tab === 'winners');
+    if (tab === 'winners') loadWinners();
+  }
+
+  // ── Polymarket position matching ──────────────────────────────────────────
+  let matchedPosition = null;
+  let allPositions = [];
+
+  // Fetch all positions once on load
+  async function fetchPositions() {
+    try {
+      const data = await fetch('/api/positions').then(r => r.json());
+      if (Array.isArray(data)) allPositions = data;
+    } catch (e) { /* silent */ }
+  }
+
+  function fuzzyMatchPosition(title) {
+    if (!title || !allPositions.length) return null;
+    const words = title.toLowerCase().split(/\s+/).filter(w => w.length > 3);
+    if (!words.length) return null;
+    let best = null, bestScore = 0;
+    allPositions.forEach(pos => {
+      const market = (pos.market || pos.title || '').toLowerCase();
+      const hits = words.filter(w => market.includes(w)).length;
+      const score = hits / words.length;
+      if (score > bestScore && score >= 0.4) { bestScore = score; best = pos; }
+    });
+    return best;
+  }
+
+  function showPositionMatch(pos) {
+    matchedPosition = pos;
+    document.getElementById('posMarket').textContent   = pos.market || pos.title || '?';
+    const outcomeEl = document.getElementById('posOutcome');
+    outcomeEl.textContent = pos.outcome || 'YES';
+    outcomeEl.className = 'position-outcome' + (pos.outcome?.toUpperCase() === 'NO' ? ' no' : '');
+    const entryC = pos.avgPrice ? Math.round(pos.avgPrice * 100) + '¢' : '?';
+    document.getElementById('posEntry').textContent   = entryC;
+    document.getElementById('posSize').textContent    = pos.initialValue ? '$' + pos.initialValue.toFixed(0) : (pos.size ? pos.size.toFixed(0) + ' sh' : '?');
+    document.getElementById('posCurrent').textContent = pos.currentValue ? '$' + pos.currentValue.toFixed(0) : '?';
+    document.getElementById('positionCard').classList.add('visible');
+    document.getElementById('posLoading').classList.remove('visible');
+    document.getElementById('posNone').classList.remove('visible');
+  }
+
+  function showPositionNone() {
+    matchedPosition = null;
+    document.getElementById('positionCard').classList.remove('visible');
+    document.getElementById('posLoading').classList.remove('visible');
+    document.getElementById('posNone').classList.add('visible');
+  }
+
+  function clearPositionMatch() {
+    matchedPosition = null;
+    document.getElementById('positionCard').classList.remove('visible');
+    document.getElementById('posNone').classList.add('visible');
+  }
+
+  async function tryMatchPosition(imageFile) {
+    // Show loading
+    document.getElementById('positionCard').classList.remove('visible');
+    document.getElementById('posNone').classList.remove('visible');
+    document.getElementById('posLoading').classList.add('visible');
+
+    try {
+      // Step 1: Extract market title from image
+      const fd = new FormData();
+      fd.append('toolCard', imageFile);
+      const { title } = await fetch('/api/extract-market', { method: 'POST', body: fd }).then(r => r.json());
+      if (!title) { showPositionNone(); return; }
+
+      // Step 2: Fuzzy match against positions
+      await fetchPositions(); // ensure fresh
+      const match = fuzzyMatchPosition(title);
+      if (match) showPositionMatch(match);
+      else showPositionNone();
+    } catch (e) {
+      showPositionNone();
+    }
+  }
+
+  // ── Winners tab ────────────────────────────────────────────────────────────
+  async function loadWinners() {
+    const el = document.getElementById('winnersList');
+    el.innerHTML = '<div class="winners-empty"><span class="spinner"></span> Loading...</div>';
+    try {
+      const items = await fetch('/api/winners').then(r => r.json());
+      if (!items.length) {
+        el.innerHTML = '<div class="winners-empty">No posted tweets yet. Post a thread to start tracking wins.</div>';
+        return;
+      }
+      el.innerHTML = items.map(item => {
+        const date = item.posted_at
+          ? new Date(item.posted_at).toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' at ' +
+            new Date(item.posted_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          : '—';
+        const market = item.market_title ? `<div class="winner-market">${escHtml(item.market_title)}</div>` : '';
+        const badge  = item.won ? '<span class="winner-badge">🏆 Won</span>' : '';
+        const qtBtn  = item.won
+          ? `<button class="qt-btn" onclick='openQtModal(${JSON.stringify(JSON.stringify(item))})'>✍️ Generate QT</button>`
+          : '';
+        return `
+          <div class="winner-item ${item.won ? 'won' : ''}">
+            <div class="winner-item-header">
+              <div class="winner-date">${date}</div>
+              ${badge}
+            </div>
+            ${market}
+            <div class="winner-tweet-preview">${escHtml(item.tweet1)}</div>
+            <div class="winner-actions">${qtBtn}</div>
+          </div>`;
+      }).join('');
+    } catch (err) {
+      el.innerHTML = `<div class="winners-empty">Error loading: ${escHtml(err.message)}</div>`;
+    }
+  }
+
+  // ── QT modal ───────────────────────────────────────────────────────────────
+  let currentQtItem = null;
+
+  function openQtModal(itemJson) {
+    const item = JSON.parse(itemJson);
+    currentQtItem = item;
+    document.getElementById('qtModalMarket').textContent = item.market_title || 'Resolved position';
+    document.getElementById('qtOriginalPreview').textContent = item.tweet1;
+    document.getElementById('qtLoading').style.display = 'none';
+    document.getElementById('qtResultText').style.display = 'none';
+    document.getElementById('qtQueueBtn').style.display = 'none';
+    document.getElementById('qtResultText').value = '';
+    document.getElementById('qtModalBg').classList.add('open');
+    generateQT(item);
+  }
+
+  function closeQtModal() {
+    document.getElementById('qtModalBg').classList.remove('open');
+    currentQtItem = null;
+  }
+
+  async function generateQT(item) {
+    document.getElementById('qtLoading').style.display = 'block';
+    document.getElementById('qtResultText').style.display = 'none';
+    document.getElementById('qtQueueBtn').style.display = 'none';
+    try {
+      const pos = item.position || {};
+      const entryC = pos.avgPrice ? Math.round(pos.avgPrice * 100) : '?';
+      const data = await fetch('/generate-qt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          originalTweet: item.tweet1,
+          marketTitle:   item.market_title || pos.market || '?',
+          entryPrice:    entryC,
+          cashPaidOut:   pos.cashPaidOut || pos.currentValue || null
+        })
+      }).then(r => r.json());
+      if (data.error) throw new Error(data.error);
+      document.getElementById('qtResultText').value = data.qt;
+      document.getElementById('qtResultText').style.display = 'block';
+      document.getElementById('qtQueueBtn').style.display = 'block';
+    } catch (err) {
+      document.getElementById('qtResultText').value = 'Error: ' + err.message;
+      document.getElementById('qtResultText').style.display = 'block';
+    } finally {
+      document.getElementById('qtLoading').style.display = 'none';
+    }
+  }
+
+  async function queueQT() {
+    if (!currentQtItem) return;
+    const qtText = document.getElementById('qtResultText').value.trim();
+    if (!qtText) return;
+    // QT is a single tweet — we still need tweet1 + tweet2, so tweet2 is the QT and tweet1 is a stub referencing the original
+    const tweet1Id = currentQtItem.tweet1_id;
+    const qtFullText = tweet1Id
+      ? `${qtText}\n\nhttps://twitter.com/i/status/${tweet1Id}`
+      : qtText;
+
+    const btn = document.getElementById('qtQueueBtn');
+    btn.disabled = true; btn.textContent = 'Adding...';
+    try {
+      const data = await fetch('/queue/add', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tweet1: qtFullText,
+          tweet2: '.',  // placeholder — user can remove before posting
+          market_title: currentQtItem.market_title || null
+        })
+      }).then(r => r.json());
+      if (data.error) throw new Error(data.error);
+      showToast('QT added to queue 🏆', 'success');
+      closeQtModal();
+      switchTab('generate');
+      loadQueue();
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      btn.disabled = false; btn.textContent = 'Add QT to Queue';
+    }
+  }
+
   // ── Unicode bold (renders as bold on Twitter) ──────────────────────────────
   const BOLD_MAP = (() => {
     const map = {};
@@ -693,16 +1125,20 @@
 
   setupUpload('slipInput', 'slipZone', 'slipImg', url => {
     slipDataUrl = url;
-    // Update tweet 1 image if already showing
     const tImg = document.getElementById('tweetImgSrc1');
     if (tImg) { tImg.src = url; document.getElementById('tweetImg1').classList.add('visible'); }
   });
 
   setupUpload('toolInput', 'toolZone', 'toolImg', url => {
     toolDataUrl = url;
-    // Update tweet 2 image if already showing
     const tImg = document.getElementById('tweetImgSrc2');
     if (tImg) { tImg.src = url; document.getElementById('tweetImg2').classList.add('visible'); }
+  });
+
+  // Auto-match position on tool card upload
+  document.getElementById('toolInput').addEventListener('change', function() {
+    const file = this.files[0];
+    if (file) tryMatchPosition(file);
   });
 
   // Style buttons
@@ -736,6 +1172,7 @@
       if (label) fd.append('label', label);
       const style = document.querySelector('.style-btn.active')?.dataset.style || '';
       if (style) fd.append('style', style);
+      if (matchedPosition) fd.append('positionData', JSON.stringify(matchedPosition));
 
       const data = await fetch('/generate', { method: 'POST', body: fd }).then(r => r.json());
       if (data.error) throw new Error(data.error);
@@ -789,7 +1226,11 @@
     try {
       const data = await fetch('/post/now', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tweet1, tweet2 })
+        body: JSON.stringify({
+          tweet1, tweet2,
+          condition_id:  matchedPosition?.conditionId || matchedPosition?.condition_id || null,
+          market_title:  matchedPosition?.market || matchedPosition?.title || null
+        })
       }).then(r => r.json());
       if (data.error) throw new Error(data.error);
       showToast('Thread posted! 🎉', 'success');
@@ -812,7 +1253,11 @@
     try {
       const data = await fetch('/queue/add', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tweet1, tweet2 })
+        body: JSON.stringify({
+          tweet1, tweet2,
+          condition_id: matchedPosition?.conditionId || matchedPosition?.condition_id || null,
+          market_title: matchedPosition?.market || matchedPosition?.title || null
+        })
       }).then(r => r.json());
       if (data.error) throw new Error(data.error);
 
@@ -903,6 +1348,7 @@
 
   checkAuth();
   loadQueue();
+  fetchPositions(); // pre-load positions for instant matching
   setInterval(loadQueue, 60_000);
 </script>
 </body>
