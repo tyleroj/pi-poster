@@ -970,6 +970,36 @@
     document.getElementById('positionCard').classList.add('visible');
     document.getElementById('posLoading').classList.remove('visible');
     document.getElementById('posNone').classList.remove('visible');
+
+    // Auto-fetch the Polymarket twitter card image for the matched position
+    const conditionId = pos.conditionId || pos.condition_id || null;
+    if (conditionId) {
+      fetch(`/api/slip-image?conditionId=${encodeURIComponent(conditionId)}`)
+        .then(r => r.json())
+        .then(({ imageUrl }) => {
+          if (imageUrl) loadSlipFromUrl(imageUrl);
+        })
+        .catch(() => {}); // silent — user can still upload manually
+    }
+  }
+
+  async function loadSlipFromUrl(url) {
+    try {
+      // Proxy through our server to avoid CORS issues on Polymarket S3 images
+      const r = await fetch(`/api/proxy-image?url=${encodeURIComponent(url)}`);
+      if (!r.ok) return;
+      const blob = await r.blob();
+      const file = new File([blob], 'slip.png', { type: blob.type || 'image/png' });
+
+      // Inject the file into slipInput so generate() picks it up via FormData
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      const slipInput = document.getElementById('slipInput');
+      slipInput.files = dt.files;
+
+      // Trigger the existing setupUpload handler to show preview + set slipDataUrl
+      slipInput.dispatchEvent(new Event('change'));
+    } catch (e) { /* silent — user can still upload manually */ }
   }
 
   function showPositionNone() {
