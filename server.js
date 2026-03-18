@@ -126,21 +126,19 @@ async function getAccessToken() {
 
 // ── Upload media to Twitter v1.1 ──────────────────────────────────────────────
 async function uploadMedia(buffer, mimeType, accessToken) {
-  const FormDataNode = require('form-data');
-  const form = new FormDataNode();
-  form.append('media', buffer, { filename: 'image', contentType: mimeType });
-
+  // Use base64 media_data — simpler and more reliable than multipart with fetch
+  const base64 = buffer.toString('base64');
   const res = await fetch('https://upload.twitter.com/1.1/media/upload.json', {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${accessToken}`,
-      ...form.getHeaders()
+      'Content-Type': 'application/x-www-form-urlencoded'
     },
-    body: form
+    body: new URLSearchParams({ media_data: base64, media_type: mimeType }).toString()
   });
-  const data = await res.json();
-  if (!res.ok) throw new Error('Media upload failed: ' + JSON.stringify(data));
-  return data.media_id_string;
+  const text = await res.text();
+  if (!res.ok) throw new Error(`Media upload ${res.status}: ${text.slice(0, 300)}`);
+  return JSON.parse(text).media_id_string;
 }
 
 // ── Post a thread ─────────────────────────────────────────────────────────────
