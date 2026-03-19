@@ -120,25 +120,24 @@ async function uploadMedia(buffer, mimeType) {
   const category = mimeType.startsWith('image/gif') ? 'tweet_gif' : 'tweet_image';
   const uploadUrl = 'https://upload.twitter.com/1.1/media/upload.json';
 
-  // Sign with OAuth 1.0a — no body params in signature for multipart/form-data
-  const authHeader = oauth1Header('POST', uploadUrl, token, secret);
-
-  // MUST use multipart/form-data (not url-encoded) so body params stay out of
-  // the OAuth signature base string. With url-encoded, OAuth 1.0a requires ALL
-  // body params in the signature — but media_data is too large to sign.
-  // Send media_data (base64 string) as a multipart text field.
-  // This keeps it out of the OAuth signature while still being accepted by Twitter.
-  const formData = new FormData();
-  formData.append('media_data', base64);
-  formData.append('media_category', category);
+  // For application/x-www-form-urlencoded, OAuth 1.0a requires ALL body params
+  // in the signature. Include media_data + media_category in the signed data.
+  const bodyParams = { media_data: base64, media_category: category };
+  const authData = oauth.authorize(
+    { url: uploadUrl, method: 'POST', data: bodyParams },
+    { key: token, secret }
+  );
+  const authHeader = oauth.toHeader(authData).Authorization;
 
   console.log(`[media] Uploading ${mimeType} (${Math.round(buffer.length / 1024)}KB), category=${category}`);
 
   const res = await fetch(uploadUrl, {
-    method:  'POST',
-    headers: { Authorization: authHeader },
-    // Let fetch set Content-Type with multipart boundary automatically
-    body: formData
+    method: 'POST',
+    headers: {
+      Authorization: authHeader,
+      'Content-Type': 'application/x-www-form-urlencoded'
+    },
+    body: new URLSearchParams(bodyParams).toString()
   });
   const text = await res.text();
   console.log(`[media] Twitter response ${res.status}:`, text.slice(0, 500));
@@ -706,15 +705,21 @@ app.get('/debug/media', async (req, res) => {
       'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwADhQGAWjR9awAAAABJRU5ErkJggg==',
       'base64'
     );
-    const authHeader = oauth1Header('POST', uploadUrl, token, secret);
-
-    const formData = new FormData();
-    formData.append('media_data', png1x1.toString('base64'));
+    const base64 = png1x1.toString('base64');
+    const bodyParams = { media_data: base64 };
+    const authData = oauth.authorize(
+      { url: uploadUrl, method: 'POST', data: bodyParams },
+      { key: token, secret }
+    );
+    const authHeader = oauth.toHeader(authData).Authorization;
 
     const r = await fetch(uploadUrl, {
       method: 'POST',
-      headers: { Authorization: authHeader },
-      body: formData
+      headers: {
+        Authorization: authHeader,
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: new URLSearchParams(bodyParams).toString()
     });
     const text = await r.text();
     res.json({ ...info, upload_status: r.status, upload_response: text.slice(0, 500) });
