@@ -115,54 +115,76 @@ async function twitterFetch(method, endpoint, body) {
   return res;
 }
 
-// ── Upload media to Twitter v1.1 (OAuth 1.0a + form-data multipart) ──────────
-function uploadMedia(buffer, mimeType) {
+// ── Upload media via X API v2 (chunked: INIT → APPEND → FINALIZE) ────────────
+// v1.1 upload.twitter.com was deprecated March 31 2025. The new endpoint is
+// https://api.x.com/2/media/upload using a 3-step chunked flow for all media.
+
+function postMultipart(urlStr, authHeader, formData) {
   return new Promise((resolve, reject) => {
-    const { token, secret } = getStoredTokens();
-    const uploadUrl = 'https://upload.twitter.com/1.1/media/upload.json';
-
-    // Multipart body params are NOT included in OAuth 1.0a signature
-    const authHeader = oauth1Header('POST', uploadUrl, token, secret);
-
-    // Use form-data package for proper multipart serialization via https.request
-    const fd = new FormDataLib();
-    fd.append('media', buffer, {
-      filename: 'media.' + (mimeType === 'image/png' ? 'png' : mimeType === 'image/gif' ? 'gif' : 'jpg'),
-      contentType: mimeType
-    });
-
-    console.log(`[media] Uploading ${mimeType} (${Math.round(buffer.length / 1024)}KB) via multipart`);
-
+    const u = new URL(urlStr);
     const req = https.request({
       method: 'POST',
-      hostname: 'upload.twitter.com',
-      path: '/1.1/media/upload.json',
-      headers: {
-        Authorization: authHeader,
-        ...fd.getHeaders()
-      }
+      hostname: u.hostname,
+      path: u.pathname,
+      headers: { Authorization: authHeader, ...formData.getHeaders() }
     }, (res) => {
-      let data = '';
-      res.on('data', chunk => data += chunk);
+      let body = '';
+      res.on('data', c => body += c);
       res.on('end', () => {
-        console.log(`[media] Twitter response ${res.statusCode}:`, data.slice(0, 500));
-        if (res.statusCode !== 200 && res.statusCode !== 202) {
-          reject(new Error(`Media upload ${res.statusCode}: ${data.slice(0, 400)}`));
+        console.log(`[media] ${u.pathname} ${res.statusCode}:`, body.slice(0, 300));
+        if (res.statusCode >= 400) {
+          reject(new Error(`${res.statusCode}: ${body.slice(0, 400)}`));
           return;
         }
-        try {
-          const json = JSON.parse(data);
-          console.log(`[media] Got media_id_string: ${json.media_id_string}`);
-          resolve(json.media_id_string);
-        } catch (e) {
-          reject(new Error(`Media upload parse error: ${data.slice(0, 300)}`));
-        }
+        try { resolve(body ? JSON.parse(body) : {}); }
+        catch { resolve({}); }
       });
     });
-
     req.on('error', reject);
-    fd.pipe(req);
+    formData.pipe(req);
   });
+}
+
+async function uploadMedia(buffer, mimeType) {
+  const { token, secret } = getStoredTokens();
+  const uploadUrl = 'https://api.x.com/2/media/upload';
+  const category  = mimeType.startsWith('image/gif') ? 'tweet_gif' : 'tweet_image';
+  const ext       = mimeType === 'image/png' ? 'png' : mimeType === 'image/gif' ? 'gif' : 'jpg';
+
+  console.log(`[media] Uploading ${mimeType} (${Math.round(buffer.length / 1024)}KB) via v2 chunked`);
+
+  // ── Step 1: INIT ──
+  const initFd = new FormDataLib();
+  initFd.append('command',        'INIT');
+  initFd.append('media_type',     mimeType);
+  initFd.append('total_bytes',    String(buffer.length));
+  initFd.append('media_category', category);
+
+  const initAuth = oauth1Header('POST', uploadUrl, token, secret);
+  const initRes  = await postMultipart(uploadUrl, initAuth, initFd);
+  const mediaId  = initRes.media_id_string;
+  if (!mediaId) throw new Error('INIT failed — no media_id: ' + JSON.stringify(initRes));
+
+  // ── Step 2: APPEND (single chunk for images) ──
+  const appendFd = new FormDataLib();
+  appendFd.append('command',       'APPEND');
+  appendFd.append('media_id',      mediaId);
+  appendFd.append('segment_index', '0');
+  appendFd.append('media', buffer, { filename: `media.${ext}`, contentType: mimeType });
+
+  const appendAuth = oauth1Header('POST', uploadUrl, token, secret);
+  await postMultipart(uploadUrl, appendAuth, appendFd);
+
+  // ── Step 3: FINALIZE ──
+  const finFd = new FormDataLib();
+  finFd.append('command',  'FINALIZE');
+  finFd.append('media_id', mediaId);
+
+  const finAuth = oauth1Header('POST', uploadUrl, token, secret);
+  await postMultipart(uploadUrl, finAuth, finFd);
+
+  console.log(`[media] Upload complete: media_id=${mediaId}`);
+  return mediaId;
 }
 
 // ── Post a thread ─────────────────────────────────────────────────────────────
@@ -709,7 +731,6 @@ app.get('/debug/me', async (req, res) => {
 app.get('/debug/media', async (req, res) => {
   try {
     const { token, secret } = getStoredTokens();
-    const uploadUrl = 'https://upload.twitter.com/1.1/media/upload.json';
 
     // Show credential prefixes so we can verify they're correct
     const info = {
