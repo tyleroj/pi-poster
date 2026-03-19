@@ -673,18 +673,54 @@ app.post('/generate', upload.fields([
   }
 });
 
-// ── Debug: test media upload without posting ──────────────────────────────────
+// ── Debug endpoints ───────────────────────────────────────────────────────────
+// Test 1: verify OAuth 1.0a signing works at all (calls v2 /users/me)
+app.get('/debug/me', async (req, res) => {
+  try {
+    const r = await twitterFetch('GET', '/users/me');
+    const d = await r.json();
+    res.json({ status: r.status, data: d });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Test 2: media upload with verbose output
 app.get('/debug/media', async (req, res) => {
   try {
-    // Tiny 1×1 white PNG — tests OAuth 1.0a signing without posting a tweet
+    const { token, secret } = getStoredTokens();
+    const uploadUrl = 'https://upload.twitter.com/1.1/media/upload.json';
+
+    // Show credential prefixes so we can verify they're correct
+    const info = {
+      consumer_key_prefix: TWITTER_API_KEY?.slice(0, 8) + '...',
+      token_prefix: token?.slice(0, 12) + '...',
+      secret_length: secret?.length,
+    };
+
+    // Try the upload
     const png1x1 = Buffer.from(
       'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwADhQGAWjR9awAAAABJRU5ErkJggg==',
       'base64'
     );
-    const mediaId = await uploadMedia(png1x1, 'image/png');
-    res.json({ success: true, media_id_string: mediaId });
+    const base64 = png1x1.toString('base64');
+    const authHeader = oauth1Header('POST', uploadUrl, token, secret);
+
+    const body = new URLSearchParams();
+    body.append('media_data', base64);
+
+    const r = await fetch(uploadUrl, {
+      method: 'POST',
+      headers: {
+        Authorization: authHeader,
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: body.toString()
+    });
+    const text = await r.text();
+    res.json({ ...info, upload_status: r.status, upload_response: text.slice(0, 500) });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    res.status(500).json({ error: err.message });
   }
 });
 
