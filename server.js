@@ -149,23 +149,6 @@ function postMultipart(urlStr, authHeader, formData) {
   });
 }
 
-// Helper: POST JSON via fetch (for INIT and FINALIZE steps)
-async function postJSON(urlStr, authHeader, jsonBody) {
-  console.log(`[media] POST ${urlStr}`, jsonBody ? JSON.stringify(jsonBody).slice(0, 200) : '(no body)');
-  const res = await fetch(urlStr, {
-    method: 'POST',
-    headers: {
-      Authorization: authHeader,
-      'Content-Type': 'application/json'
-    },
-    body: jsonBody ? JSON.stringify(jsonBody) : undefined
-  });
-  const text = await res.text();
-  console.log(`[media] ${new URL(urlStr).pathname} ${res.status}:`, text.slice(0, 300));
-  if (!res.ok) throw new Error(`${res.status}: ${text.slice(0, 400)}`);
-  return text ? JSON.parse(text) : {};
-}
-
 async function uploadMedia(buffer, mimeType) {
   const { token, secret } = getStoredTokens();
   const category = mimeType.startsWith('image/gif') ? 'tweet_gif' : 'tweet_image';
@@ -173,29 +156,31 @@ async function uploadMedia(buffer, mimeType) {
 
   console.log(`[media] Uploading ${mimeType} (${Math.round(buffer.length / 1024)}KB) via v2 chunked`);
 
-  // ── Step 1: INITIALIZE ──
+  // ── Step 1: INITIALIZE (multipart, matching Twitter curl examples) ──
   const initUrl  = `${MEDIA_BASE}/initialize`;
   const initAuth = oauth1Header('POST', initUrl, token, secret);
-  const initRes  = await postJSON(initUrl, initAuth, {
-    media_type:     mimeType,
-    total_bytes:    buffer.length,
-    media_category: category
-  });
+  const initFd   = new FormDataLib();
+  initFd.append('media_type',     mimeType);
+  initFd.append('total_bytes',    String(buffer.length));
+  initFd.append('media_category', category);
+  const initRes = await postMultipart(initUrl, initAuth, initFd);
   const mediaId = initRes.data?.id || initRes.media_id_string || initRes.id;
   if (!mediaId) throw new Error('INIT failed — no media_id: ' + JSON.stringify(initRes));
 
   // ── Step 2: APPEND (single chunk for images) ──
   const appendUrl  = `${MEDIA_BASE}/${mediaId}/append`;
   const appendAuth = oauth1Header('POST', appendUrl, token, secret);
-  const fd = new FormDataLib();
-  fd.append('segment_index', '0');
-  fd.append('media', buffer, { filename: `media.${ext}`, contentType: mimeType });
-  await postMultipart(appendUrl, appendAuth, fd);
+  const appendFd   = new FormDataLib();
+  appendFd.append('segment_index', '0');
+  appendFd.append('media', buffer, { filename: `media.${ext}`, contentType: mimeType });
+  await postMultipart(appendUrl, appendAuth, appendFd);
 
   // ── Step 3: FINALIZE ──
   const finUrl  = `${MEDIA_BASE}/${mediaId}/finalize`;
   const finAuth = oauth1Header('POST', finUrl, token, secret);
-  await postJSON(finUrl, finAuth);
+  const finFd   = new FormDataLib();
+  // Empty form — media_id is in the URL path
+  await postMultipart(finUrl, finAuth, finFd);
 
   console.log(`[media] Upload complete: media_id=${mediaId}`);
   return mediaId;
@@ -753,9 +738,9 @@ app.get('/debug/media', async (req, res) => {
       secret_length: secret?.length,
     };
 
-    // Try the upload
+    // 50×50 red PNG test image (~141 bytes)
     const png1x1 = Buffer.from(
-      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwADhQGAWjR9awAAAABJRU5ErkJggg==',
+      'iVBORw0KGgoAAAANSUhEUgAAADIAAAAyCAYAAAAeP4ixAAAAVElEQVR4nO3PsQ0AMAjAMP5/mp7RCHnIHs/O7IXm9wAISDyQWiC1QGqB1AKpBVILpBZILZBaILVAaoHUAqkFUgukFkgtkFogtUBqgdQCqQVS6wzkAbAzdZYM2Ma3AAAAAElFTkSuQmCC',
       'base64'
     );
     // Use same uploadMedia function as real uploads
