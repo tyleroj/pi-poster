@@ -4,6 +4,7 @@ const Anthropic = require('@anthropic-ai/sdk');
 const Database = require('better-sqlite3');
 const session = require('express-session');
 const crypto = require('crypto');
+const OAuth = require('oauth-1.0a');
 const path = require('path');
 const fs = require('fs');
 
@@ -66,31 +67,23 @@ const TWITTER_API_KEY    = process.env.TWITTER_CLIENT_ID;      // OAuth 1.0a con
 const TWITTER_API_SECRET = process.env.TWITTER_CLIENT_SECRET;  // OAuth 1.0a consumer secret
 const CALLBACK_URL = process.env.CALLBACK_URL || 'https://evbettors-tweet-tool.onrender.com/auth/twitter/callback';
 
-// ── OAuth 1.0a signing ────────────────────────────────────────────────────────
-// userToken/userSecret: the authorized user's tokens (null during request-token step)
-// extraParams: additional params included in signature (e.g. oauth_callback, oauth_verifier)
-function oauth1Header(method, url, userToken, userSecret, extraParams = {}) {
-  const oauthParams = {
-    oauth_consumer_key:     TWITTER_API_KEY,
-    oauth_nonce:            crypto.randomBytes(16).toString('hex'),
-    oauth_signature_method: 'HMAC-SHA1',
-    oauth_timestamp:        Math.floor(Date.now() / 1000).toString(),
-    oauth_version:          '1.0',
-    ...extraParams
-  };
-  if (userToken) oauthParams.oauth_token = userToken;
+// ── OAuth 1.0a signing (using battle-tested oauth-1.0a library) ──────────────
+const oauth = OAuth({
+  consumer: { key: TWITTER_API_KEY, secret: TWITTER_API_SECRET },
+  signature_method: 'HMAC-SHA1',
+  hash_function(baseString, key) {
+    return crypto.createHmac('sha1', key).update(baseString).digest('base64');
+  }
+});
 
-  const paramStr  = Object.keys(oauthParams).sort()
-    .map(k => `${encodeURIComponent(k)}=${encodeURIComponent(oauthParams[k])}`)
-    .join('&');
-  const baseStr    = `${method.toUpperCase()}&${encodeURIComponent(url)}&${encodeURIComponent(paramStr)}`;
-  const signingKey = `${encodeURIComponent(TWITTER_API_SECRET)}&${userSecret ? encodeURIComponent(userSecret) : ''}`;
-  const signature  = crypto.createHmac('sha1', signingKey).update(baseStr).digest('base64');
-
-  oauthParams.oauth_signature = signature;
-  return 'OAuth ' + Object.keys(oauthParams).sort()
-    .map(k => `${encodeURIComponent(k)}="${encodeURIComponent(oauthParams[k])}"`)
-    .join(', ');
+// Build an OAuth 1.0a Authorization header
+// token: { key, secret } or null (for request-token step)
+// requestData: { url, method, data? }
+function oauth1Header(method, url, userToken, userSecret, extraData = {}) {
+  const requestData = { url, method, data: extraData };
+  const token = userToken ? { key: userToken, secret: userSecret || '' } : undefined;
+  const authData = oauth.authorize(requestData, token);
+  return oauth.toHeader(authData).Authorization;
 }
 
 // ── Token management ──────────────────────────────────────────────────────────

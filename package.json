@@ -11,6 +11,7 @@
     "better-sqlite3": "^9.4.3",
     "express": "^5.2.1",
     "express-session": "^1.18.0",
-    "multer": "^2.1.1"
+    "multer": "^2.1.1",
+    "oauth-1.0a": "^2.2.6"
   }
 }
