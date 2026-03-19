@@ -181,7 +181,7 @@ async function uploadMedia(buffer, mimeType) {
     total_bytes:    buffer.length,
     media_category: category
   });
-  const mediaId = initRes.media_id_string || initRes.id;
+  const mediaId = initRes.data?.id || initRes.media_id_string || initRes.id;
   if (!mediaId) throw new Error('INIT failed — no media_id: ' + JSON.stringify(initRes));
 
   // ── Step 2: APPEND (single chunk for images) ──
