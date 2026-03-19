@@ -1211,11 +1211,43 @@
       } else {
         showToast('Thread posted! 🎉', 'success');
       }
+      // Transform button into "New Thread" to clear and start fresh
+      btn.disabled = false;
+      btn.textContent = '✨ New Thread';
+      btn.style.background = 'linear-gradient(135deg, #5fffb0 0%, #1d9bf0 100%)';
+      btn.onclick = function() {
+        clearAll();
+        btn.textContent = 'Post Now 𝕏';
+        btn.style.background = '';
+        btn.onclick = postNow;
+      };
     } catch (err) {
       showToast(err.message, 'error');
-    } finally {
       btn.disabled = false; btn.textContent = 'Post Now 𝕏';
     }
+  }
+
+  function clearAll() {
+    // Clear text editors
+    document.getElementById('tweet1').value = '';
+    document.getElementById('tweet2').value = '';
+    document.getElementById('tweet1').style.height = 'auto';
+    document.getElementById('tweet2').style.height = 'auto';
+
+    // Clear file inputs and previews
+    document.getElementById('slipInput').value = '';
+    document.getElementById('toolInput').value = '';
+    document.getElementById('slipPreview').style.display = 'none';
+    document.getElementById('toolPreview').style.display = 'none';
+    document.getElementById('slipZone').querySelector('.upload-placeholder').style.display = '';
+    document.getElementById('toolZone').querySelector('.upload-placeholder').style.display = '';
+
+    // Clear generated metadata
+    generatedMarketTitle = null;
+    generatedEntryPrice  = null;
+
+    // Update char counts
+    document.querySelectorAll('.char-count').forEach(el => el.textContent = '0 / 280');
   }
 
   // ── Queue ──────────────────────────────────────────────────────────────────
