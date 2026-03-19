@@ -126,9 +126,10 @@ async function uploadMedia(buffer, mimeType) {
   // MUST use multipart/form-data (not url-encoded) so body params stay out of
   // the OAuth signature base string. With url-encoded, OAuth 1.0a requires ALL
   // body params in the signature — but media_data is too large to sign.
-  // For multipart: use "media" field with raw binary (not "media_data" with base64)
+  // Send media_data (base64 string) as a multipart text field.
+  // This keeps it out of the OAuth signature while still being accepted by Twitter.
   const formData = new FormData();
-  formData.append('media', new Blob([buffer], { type: mimeType }), 'upload.png');
+  formData.append('media_data', base64);
   formData.append('media_category', category);
 
   console.log(`[media] Uploading ${mimeType} (${Math.round(buffer.length / 1024)}KB), category=${category}`);
@@ -708,7 +709,7 @@ app.get('/debug/media', async (req, res) => {
     const authHeader = oauth1Header('POST', uploadUrl, token, secret);
 
     const formData = new FormData();
-    formData.append('media', new Blob([png1x1], { type: 'image/png' }), 'test.png');
+    formData.append('media_data', png1x1.toString('base64'));
 
     const r = await fetch(uploadUrl, {
       method: 'POST',
