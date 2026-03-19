@@ -126,8 +126,9 @@ async function uploadMedia(buffer, mimeType) {
   // MUST use multipart/form-data (not url-encoded) so body params stay out of
   // the OAuth signature base string. With url-encoded, OAuth 1.0a requires ALL
   // body params in the signature — but media_data is too large to sign.
+  // For multipart: use "media" field with raw binary (not "media_data" with base64)
   const formData = new FormData();
-  formData.append('media_data', base64);
+  formData.append('media', new Blob([buffer], { type: mimeType }), 'upload.png');
   formData.append('media_category', category);
 
   console.log(`[media] Uploading ${mimeType} (${Math.round(buffer.length / 1024)}KB), category=${category}`);
@@ -704,11 +705,10 @@ app.get('/debug/media', async (req, res) => {
       'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwADhQGAWjR9awAAAABJRU5ErkJggg==',
       'base64'
     );
-    const base64 = png1x1.toString('base64');
     const authHeader = oauth1Header('POST', uploadUrl, token, secret);
 
     const formData = new FormData();
-    formData.append('media_data', base64);
+    formData.append('media', new Blob([png1x1], { type: 'image/png' }), 'test.png');
 
     const r = await fetch(uploadUrl, {
       method: 'POST',
