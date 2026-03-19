@@ -151,7 +151,7 @@ function postMultipart(urlStr, authHeader, formData) {
 
 // Helper: POST JSON via fetch (for INIT and FINALIZE steps)
 async function postJSON(urlStr, authHeader, jsonBody) {
-  console.log(`[media] POST ${urlStr}`, JSON.stringify(jsonBody).slice(0, 200));
+  console.log(`[media] POST ${urlStr}`, jsonBody ? JSON.stringify(jsonBody).slice(0, 200) : '(no body)');
   const res = await fetch(urlStr, {
     method: 'POST',
     headers: {
