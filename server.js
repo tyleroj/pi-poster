@@ -14,7 +14,8 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // ── Database ─────────────────────────────────────────────────────────────────
-const dataDir = path.join(__dirname, 'data');
+// DATA_DIR env var → Render persistent disk mount; falls back to local ./data
+const dataDir = process.env.DATA_DIR || path.join(__dirname, 'data');
 if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
 
 const db = new Database(path.join(dataDir, 'queue.db'));
