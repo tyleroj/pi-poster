@@ -120,22 +120,23 @@ async function uploadMedia(buffer, mimeType) {
   const category = mimeType.startsWith('image/gif') ? 'tweet_gif' : 'tweet_image';
   const uploadUrl = 'https://upload.twitter.com/1.1/media/upload.json';
 
-  // Sign with OAuth 1.0a using stored user tokens; media_data excluded from sig (too large)
+  // Sign with OAuth 1.0a — no body params in signature for multipart/form-data
   const authHeader = oauth1Header('POST', uploadUrl, token, secret);
 
-  const body = new URLSearchParams();
-  body.append('media_data',    base64);
-  body.append('media_category', category);
+  // MUST use multipart/form-data (not url-encoded) so body params stay out of
+  // the OAuth signature base string. With url-encoded, OAuth 1.0a requires ALL
+  // body params in the signature — but media_data is too large to sign.
+  const formData = new FormData();
+  formData.append('media_data', base64);
+  formData.append('media_category', category);
 
   console.log(`[media] Uploading ${mimeType} (${Math.round(buffer.length / 1024)}KB), category=${category}`);
 
   const res = await fetch(uploadUrl, {
     method:  'POST',
-    headers: {
-      Authorization:  authHeader,
-      'Content-Type': 'application/x-www-form-urlencoded'
-    },
-    body: body.toString()
+    headers: { Authorization: authHeader },
+    // Let fetch set Content-Type with multipart boundary automatically
+    body: formData
   });
   const text = await res.text();
   console.log(`[media] Twitter response ${res.status}:`, text.slice(0, 500));
@@ -706,16 +707,13 @@ app.get('/debug/media', async (req, res) => {
     const base64 = png1x1.toString('base64');
     const authHeader = oauth1Header('POST', uploadUrl, token, secret);
 
-    const body = new URLSearchParams();
-    body.append('media_data', base64);
+    const formData = new FormData();
+    formData.append('media_data', base64);
 
     const r = await fetch(uploadUrl, {
       method: 'POST',
-      headers: {
-        Authorization: authHeader,
-        'Content-Type': 'application/x-www-form-urlencoded'
-      },
-      body: body.toString()
+      headers: { Authorization: authHeader },
+      body: formData
     });
     const text = await r.text();
     res.json({ ...info, upload_status: r.status, upload_response: text.slice(0, 500) });
