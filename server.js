@@ -149,6 +149,22 @@ function postMultipart(urlStr, authHeader, formData) {
   });
 }
 
+// Helper: POST JSON via fetch (for INIT and FINALIZE — v2 requires application/json)
+async function postV2JSON(urlStr, authHeader, body) {
+  const res = await fetch(urlStr, {
+    method: 'POST',
+    headers: {
+      Authorization: authHeader,
+      'Content-Type': 'application/json'
+    },
+    body: body ? JSON.stringify(body) : undefined
+  });
+  const text = await res.text();
+  console.log(`[media] ${new URL(urlStr).pathname} ${res.status}:`, text.slice(0, 300));
+  if (!res.ok) throw new Error(`${res.status}: ${text.slice(0, 400)}`);
+  return text ? JSON.parse(text) : {};
+}
+
 async function uploadMedia(buffer, mimeType) {
   const { token, secret } = getStoredTokens();
   const category = mimeType.startsWith('image/gif') ? 'tweet_gif' : 'tweet_image';
@@ -156,18 +172,18 @@ async function uploadMedia(buffer, mimeType) {
 
   console.log(`[media] Uploading ${mimeType} (${Math.round(buffer.length / 1024)}KB) via v2 chunked`);
 
-  // ── Step 1: INITIALIZE (multipart, matching Twitter curl examples) ──
+  // ── Step 1: INITIALIZE — JSON body ──
   const initUrl  = `${MEDIA_BASE}/initialize`;
   const initAuth = oauth1Header('POST', initUrl, token, secret);
-  const initFd   = new FormDataLib();
-  initFd.append('media_type',     mimeType);
-  initFd.append('total_bytes',    String(buffer.length));
-  initFd.append('media_category', category);
-  const initRes = await postMultipart(initUrl, initAuth, initFd);
+  const initRes  = await postV2JSON(initUrl, initAuth, {
+    media_type:     mimeType,
+    total_bytes:    buffer.length,
+    media_category: category
+  });
   const mediaId = initRes.data?.id || initRes.media_id_string || initRes.id;
   if (!mediaId) throw new Error('INIT failed — no media_id: ' + JSON.stringify(initRes));
 
-  // ── Step 2: APPEND (single chunk for images) ──
+  // ── Step 2: APPEND — multipart (binary data requires form-data) ──
   const appendUrl  = `${MEDIA_BASE}/${mediaId}/append`;
   const appendAuth = oauth1Header('POST', appendUrl, token, secret);
   const appendFd   = new FormDataLib();
@@ -175,12 +191,10 @@ async function uploadMedia(buffer, mimeType) {
   appendFd.append('media', buffer, { filename: `media.${ext}`, contentType: mimeType });
   await postMultipart(appendUrl, appendAuth, appendFd);
 
-  // ── Step 3: FINALIZE ──
+  // ── Step 3: FINALIZE — JSON (no body needed, media_id is in URL) ──
   const finUrl  = `${MEDIA_BASE}/${mediaId}/finalize`;
   const finAuth = oauth1Header('POST', finUrl, token, secret);
-  const finFd   = new FormDataLib();
-  // Empty form — media_id is in the URL path
-  await postMultipart(finUrl, finAuth, finFd);
+  await postV2JSON(finUrl, finAuth);
 
   console.log(`[media] Upload complete: media_id=${mediaId}`);
   return mediaId;
