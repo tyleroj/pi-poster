@@ -148,40 +148,19 @@ function postMultipart(urlStr, authHeader, formData) {
 async function uploadMedia(buffer, mimeType) {
   const { token, secret } = getStoredTokens();
   const uploadUrl = 'https://api.x.com/2/media/upload';
-  const category  = mimeType.startsWith('image/gif') ? 'tweet_gif' : 'tweet_image';
-  const ext       = mimeType === 'image/png' ? 'png' : mimeType === 'image/gif' ? 'gif' : 'jpg';
+  const ext = mimeType === 'image/png' ? 'png' : mimeType === 'image/gif' ? 'gif' : 'jpg';
 
-  console.log(`[media] Uploading ${mimeType} (${Math.round(buffer.length / 1024)}KB) via v2 chunked`);
+  console.log(`[media] Uploading ${mimeType} (${Math.round(buffer.length / 1024)}KB) via v2 direct`);
 
-  // ── Step 1: INIT ──
-  const initFd = new FormDataLib();
-  initFd.append('command',        'INIT');
-  initFd.append('media_type',     mimeType);
-  initFd.append('total_bytes',    String(buffer.length));
-  initFd.append('media_category', category);
+  // v2 simple upload: just POST the file as 'media' — no chunked INIT/APPEND/FINALIZE
+  const fd = new FormDataLib();
+  fd.append('media', buffer, { filename: `media.${ext}`, contentType: mimeType });
 
-  const initAuth = oauth1Header('POST', uploadUrl, token, secret);
-  const initRes  = await postMultipart(uploadUrl, initAuth, initFd);
-  const mediaId  = initRes.media_id_string;
-  if (!mediaId) throw new Error('INIT failed — no media_id: ' + JSON.stringify(initRes));
+  const authHeader = oauth1Header('POST', uploadUrl, token, secret);
+  const result = await postMultipart(uploadUrl, authHeader, fd);
 
-  // ── Step 2: APPEND (single chunk for images) ──
-  const appendFd = new FormDataLib();
-  appendFd.append('command',       'APPEND');
-  appendFd.append('media_id',      mediaId);
-  appendFd.append('segment_index', '0');
-  appendFd.append('media', buffer, { filename: `media.${ext}`, contentType: mimeType });
-
-  const appendAuth = oauth1Header('POST', uploadUrl, token, secret);
-  await postMultipart(uploadUrl, appendAuth, appendFd);
-
-  // ── Step 3: FINALIZE ──
-  const finFd = new FormDataLib();
-  finFd.append('command',  'FINALIZE');
-  finFd.append('media_id', mediaId);
-
-  const finAuth = oauth1Header('POST', uploadUrl, token, secret);
-  await postMultipart(uploadUrl, finAuth, finFd);
+  const mediaId = result.media_id_string || result.id;
+  if (!mediaId) throw new Error('Upload failed — no media_id: ' + JSON.stringify(result));
 
   console.log(`[media] Upload complete: media_id=${mediaId}`);
   return mediaId;
