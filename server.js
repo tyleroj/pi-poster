@@ -115,10 +115,14 @@ async function twitterFetch(method, endpoint, body) {
   return res;
 }
 
-// ── Upload media via X API v2 (chunked: INIT → APPEND → FINALIZE) ────────────
-// v1.1 upload.twitter.com was deprecated March 31 2025. The new endpoint is
-// https://api.x.com/2/media/upload using a 3-step chunked flow for all media.
+// ── Upload media via X API v2 ─────────────────────────────────────────────────
+// v1.1 upload.twitter.com was deprecated March 31 2025.
+// v2 uses separate endpoints: /initialize, /{id}/append, /{id}/finalize
+// (per twitter-api-v2 library source code)
 
+const MEDIA_BASE = 'https://api.x.com/2/media/upload';
+
+// Helper: POST multipart via https.request (for APPEND step)
 function postMultipart(urlStr, authHeader, formData) {
   return new Promise((resolve, reject) => {
     const u = new URL(urlStr);
@@ -145,24 +149,53 @@ function postMultipart(urlStr, authHeader, formData) {
   });
 }
 
+// Helper: POST JSON via fetch (for INIT and FINALIZE steps)
+async function postJSON(urlStr, authHeader, jsonBody) {
+  console.log(`[media] POST ${urlStr}`, JSON.stringify(jsonBody).slice(0, 200));
+  const res = await fetch(urlStr, {
+    method: 'POST',
+    headers: {
+      Authorization: authHeader,
+      'Content-Type': 'application/json'
+    },
+    body: jsonBody ? JSON.stringify(jsonBody) : undefined
+  });
+  const text = await res.text();
+  console.log(`[media] ${new URL(urlStr).pathname} ${res.status}:`, text.slice(0, 300));
+  if (!res.ok) throw new Error(`${res.status}: ${text.slice(0, 400)}`);
+  return text ? JSON.parse(text) : {};
+}
+
 async function uploadMedia(buffer, mimeType) {
   const { token, secret } = getStoredTokens();
-  const uploadUrl = 'https://api.x.com/2/media/upload';
+  const category = mimeType.startsWith('image/gif') ? 'tweet_gif' : 'tweet_image';
   const ext = mimeType === 'image/png' ? 'png' : mimeType === 'image/gif' ? 'gif' : 'jpg';
 
-  console.log(`[media] Uploading ${mimeType} (${Math.round(buffer.length / 1024)}KB) via v2 direct`);
+  console.log(`[media] Uploading ${mimeType} (${Math.round(buffer.length / 1024)}KB) via v2 chunked`);
 
-  // v2 simple upload: POST file as 'media' + required 'media_category'
-  const category = mimeType.startsWith('image/gif') ? 'tweet_gif' : 'tweet_image';
+  // ── Step 1: INITIALIZE ──
+  const initUrl  = `${MEDIA_BASE}/initialize`;
+  const initAuth = oauth1Header('POST', initUrl, token, secret);
+  const initRes  = await postJSON(initUrl, initAuth, {
+    media_type:     mimeType,
+    total_bytes:    buffer.length,
+    media_category: category
+  });
+  const mediaId = initRes.media_id_string || initRes.id;
+  if (!mediaId) throw new Error('INIT failed — no media_id: ' + JSON.stringify(initRes));
+
+  // ── Step 2: APPEND (single chunk for images) ──
+  const appendUrl  = `${MEDIA_BASE}/${mediaId}/append`;
+  const appendAuth = oauth1Header('POST', appendUrl, token, secret);
   const fd = new FormDataLib();
+  fd.append('segment_index', '0');
   fd.append('media', buffer, { filename: `media.${ext}`, contentType: mimeType });
-  fd.append('media_category', category);
+  await postMultipart(appendUrl, appendAuth, fd);
 
-  const authHeader = oauth1Header('POST', uploadUrl, token, secret);
-  const result = await postMultipart(uploadUrl, authHeader, fd);
-
-  const mediaId = result.media_id_string || result.id;
-  if (!mediaId) throw new Error('Upload failed — no media_id: ' + JSON.stringify(result));
+  // ── Step 3: FINALIZE ──
+  const finUrl  = `${MEDIA_BASE}/${mediaId}/finalize`;
+  const finAuth = oauth1Header('POST', finUrl, token, secret);
+  await postJSON(finUrl, finAuth);
 
   console.log(`[media] Upload complete: media_id=${mediaId}`);
   return mediaId;
