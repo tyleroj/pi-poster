@@ -152,9 +152,11 @@ async function uploadMedia(buffer, mimeType) {
 
   console.log(`[media] Uploading ${mimeType} (${Math.round(buffer.length / 1024)}KB) via v2 direct`);
 
-  // v2 simple upload: just POST the file as 'media' — no chunked INIT/APPEND/FINALIZE
+  // v2 simple upload: POST file as 'media' + required 'media_category'
+  const category = mimeType.startsWith('image/gif') ? 'tweet_gif' : 'tweet_image';
   const fd = new FormDataLib();
   fd.append('media', buffer, { filename: `media.${ext}`, contentType: mimeType });
+  fd.append('media_category', category);
 
   const authHeader = oauth1Header('POST', uploadUrl, token, secret);
   const result = await postMultipart(uploadUrl, authHeader, fd);
