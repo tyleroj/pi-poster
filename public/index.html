@@ -887,6 +887,7 @@
   // ── Slip market data (extracted silently during generate) ────────────────────
   let generatedMarketTitle = null;
   let generatedEntryPrice  = null;
+  let generatedConditionId = null;
 
 
   // ── Winners tab ────────────────────────────────────────────────────────────
@@ -1240,6 +1241,7 @@
       // Store market info for Winners tracking (extracted silently from slip)
       generatedMarketTitle = data.marketTitle || null;
       generatedEntryPrice  = data.entryPrice  || null;
+      generatedConditionId = data.conditionId || null;
 
       // Fill tweets
       const ta1 = document.getElementById('tweet1');
@@ -1293,6 +1295,7 @@
       fd.append('tweet2', tweet2);
       if (generatedMarketTitle) fd.append('market_title', generatedMarketTitle);
       if (generatedEntryPrice)  fd.append('entry_price',  generatedEntryPrice);
+      if (generatedConditionId) fd.append('condition_id', generatedConditionId);
       const slipFile = document.getElementById('slipInput').files[0];
       const toolFile = document.getElementById('toolInput').files[0];
       if (slipFile) fd.append('slip', slipFile);
@@ -1340,6 +1343,7 @@
     // Clear generated metadata
     generatedMarketTitle = null;
     generatedEntryPrice  = null;
+    generatedConditionId = null;
 
     // Update char counts
     document.querySelectorAll('.char-count').forEach(el => el.textContent = '0 / 280');
@@ -1360,6 +1364,7 @@
       fd.append('tweet2', tweet2);
       if (generatedMarketTitle) fd.append('market_title', generatedMarketTitle);
       if (generatedEntryPrice)  fd.append('entry_price',  generatedEntryPrice);
+      if (generatedConditionId) fd.append('condition_id', generatedConditionId);
       const slipFile = document.getElementById('slipInput').files[0];
       const toolFile = document.getElementById('toolInput').files[0];
       if (slipFile) fd.append('slip', slipFile);

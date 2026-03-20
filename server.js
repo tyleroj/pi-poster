@@ -504,23 +504,46 @@ app.get('/api/winners', async (req, res) => {
       );
       const d = await r.json();
       if (Array.isArray(d)) positions = d;
-    } catch (e) { /* continue without position data */ }
+      console.log(`[winners] Fetched ${positions.length} Polymarket positions for matching`);
+    } catch (e) {
+      console.error('[winners] Polymarket API failed:', e.message);
+      /* continue without position data */
+    }
 
-    // Match a DB item to a Polymarket position using market title keywords + entry price
+    // Match a DB item to a Polymarket position
+    // Strategy: try condition_id exact match first, then fuzzy title+price matching
+    // Uses market_title, tweet1 text, and entry_price as signals (none required)
     function matchPosition(item, positions) {
-      if (!item.market_title || !item.entry_price) return null;
-      const targetPrice = item.entry_price / 100; // cents → decimal (e.g. 66 → 0.66)
-      const keywords = item.market_title.toLowerCase()
+      // 1) Exact match by condition_id (most reliable)
+      if (item.condition_id) {
+        const exact = positions.find(p =>
+          p.conditionId === item.condition_id || p.asset === item.condition_id
+        );
+        if (exact) return exact;
+      }
+
+      // 2) Fuzzy match: extract keywords from market_title, falling back to tweet1
+      const titleSource = item.market_title || item.tweet1 || '';
+      const keywords = titleSource.toLowerCase()
         .replace(/[^a-z0-9\s.\-]/g, ' ').split(/\s+/).filter(w => w.length > 2);
+      if (!keywords.length) return null;
+
+      const targetPrice = item.entry_price ? item.entry_price / 100 : null;
 
       let best = null, bestScore = 0;
       for (const pos of positions) {
         const posTitle = (pos.market || pos.title || pos.question || '').toLowerCase();
-        // Price must be within 3 cents — this alone eliminates almost all wrong matches
-        if (pos.avgPrice != null && Math.abs(pos.avgPrice - targetPrice) > 0.03) continue;
         const hits = keywords.filter(w => posTitle.includes(w)).length;
-        const score = keywords.length ? hits / keywords.length : 0;
-        if (score > bestScore && score >= 0.25) { bestScore = score; best = pos; }
+        let score = keywords.length ? hits / keywords.length : 0;
+
+        // Price match is a bonus signal, not a hard filter
+        if (targetPrice != null && pos.avgPrice != null) {
+          const priceDiff = Math.abs(pos.avgPrice - targetPrice);
+          if (priceDiff <= 0.03) score += 0.15;      // tight match: strong bonus
+          else if (priceDiff <= 0.08) score += 0.05;  // loose match: small bonus
+        }
+
+        if (score > bestScore && score >= 0.20) { bestScore = score; best = pos; }
       }
       return best;
     }
@@ -530,6 +553,7 @@ app.get('/api/winners', async (req, res) => {
       let won = false;
       if (pos) {
         if (pos.redeemed && pos.cashPaidOut > 0) won = true;
+        else if (pos.curPrice >= 0.99 && pos.size > 0) won = true;
         else if (pos.size > 0 && pos.currentValue >= pos.size * 0.99) won = true;
         else if (pos.winnings > 0) won = true;
       }
@@ -784,7 +808,10 @@ app.post('/generate', upload.fields([
       } catch (e) { /* non-fatal */ }
     }
 
-    res.json({ tweet1: parts[0]?.trim() || '', tweet2: parts[1]?.trim() || '', marketTitle, entryPrice });
+    // Extract condition_id from position data for exact matching in Winners
+    const conditionId = positionData?.conditionId || positionData?.asset || null;
+
+    res.json({ tweet1: parts[0]?.trim() || '', tweet2: parts[1]?.trim() || '', marketTitle, entryPrice, conditionId });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });
@@ -838,7 +865,7 @@ app.post('/post/now', upload.fields([
   { name: 'toolCard', maxCount: 1 }
 ]), async (req, res) => {
   try {
-    const { tweet1, tweet2, market_title, entry_price } = req.body;
+    const { tweet1, tweet2, market_title, entry_price, condition_id } = req.body;
     if (!tweet1 || !tweet2) return res.status(400).json({ error: 'Both tweets required' });
 
     const slipFile  = req.files?.['slip']?.[0]     || null;
@@ -853,12 +880,12 @@ app.post('/post/now', upload.fields([
 
     const result = await postThread(tweet1, tweet2, slipFile, toolFile);
     // Save to history so the Winners tab can track it
-    db.prepare(`INSERT INTO queue (tweet1, tweet2, scheduled_at, status, posted_at, tweet1_id, tweet2_id, market_title, entry_price, slip_path, tool_path)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?)`)
+    db.prepare(`INSERT INTO queue (tweet1, tweet2, scheduled_at, status, posted_at, tweet1_id, tweet2_id, market_title, entry_price, slip_path, tool_path, condition_id)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`)
       .run(tweet1, tweet2, Date.now(), 'posted', Date.now(),
            result.tweet1Id, result.tweet2Id,
            market_title || null, entry_price ? parseInt(entry_price, 10) : null,
-           slipPath, toolPath);
+           slipPath, toolPath, condition_id || null);
     res.json({ success: true, ...result });
   } catch (err) {
     console.error('Post error:', err);
@@ -924,7 +951,7 @@ app.post('/queue/add', upload.fields([
   { name: 'toolCard', maxCount: 1 }
 ]), async (req, res) => {
   try {
-    const { tweet1, tweet2, market_title, entry_price } = req.body;
+    const { tweet1, tweet2, market_title, entry_price, condition_id } = req.body;
     if (!tweet1 || !tweet2) return res.status(400).json({ error: 'Both tweets required' });
 
     const slipFile  = req.files?.['slip']?.[0]     || null;
@@ -941,8 +968,8 @@ app.post('/queue/add', upload.fields([
     const delay  = (15 + Math.floor(Math.random() * 6)) * 60 * 1000;
     const scheduledAt = base + delay;
 
-    const info = db.prepare('INSERT INTO queue (tweet1, tweet2, scheduled_at, market_title, entry_price, slip_path, tool_path, is_quote_tweet) VALUES (?,?,?,?,?,?,?,?)')
-      .run(tweet1, tweet2, scheduledAt, market_title || null, entry_price ? parseInt(entry_price, 10) : null, slipPath, toolPath, 0);
+    const info = db.prepare('INSERT INTO queue (tweet1, tweet2, scheduled_at, market_title, entry_price, slip_path, tool_path, is_quote_tweet, condition_id) VALUES (?,?,?,?,?,?,?,?,?)')
+      .run(tweet1, tweet2, scheduledAt, market_title || null, entry_price ? parseInt(entry_price, 10) : null, slipPath, toolPath, 0, condition_id || null);
 
     res.json({ success: true, id: info.lastInsertRowid, scheduledAt });
   } catch (err) {
