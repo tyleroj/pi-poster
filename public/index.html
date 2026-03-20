@@ -921,7 +921,7 @@
         : '<div class="winners-empty">No posted tweets yet. Post a thread to start tracking.</div>';
       return;
     }
-    el.innerHTML = items.map(item => {
+    el.innerHTML = items.map((item, idx) => {
       const date = item.posted_at
         ? new Date(item.posted_at).toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' at ' +
           new Date(item.posted_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -932,7 +932,8 @@
       // Show bet slip image if available, otherwise show tweet preview
       let slipSection = '';
       if (item.slip_path) {
-        slipSection = `<img class="winner-slip-img" src="/api/images/${encodeURIComponent(item.slip_path)}" alt="Bet Slip" onclick="openTweetFromWinner(${JSON.stringify(item)}, event)" />`;
+        const tweetId = item.tweet1_id ? escHtml(item.tweet1_id) : '';
+        slipSection = `<img class="winner-slip-img" src="/api/images/${encodeURIComponent(item.slip_path)}" alt="Bet Slip" onclick="openTweetFromWinner('${tweetId}')" />`;
       } else {
         slipSection = `<div class="winner-tweet-preview">${escHtml(item.tweet1)}</div>`;
       }
@@ -942,7 +943,7 @@
       const tweetLink = tweetUrl ? `<a class="winner-tweet-link" href="${tweetUrl}" target="_blank" rel="noopener">View Tweet</a>` : '';
 
       const qtBtn = item.won
-        ? `<button class="qt-btn" onclick='openQtModal(${JSON.stringify(JSON.stringify(item))})'>✍️ Generate QT</button>`
+        ? `<button class="qt-btn" onclick="openQtModal(${idx})">✍️ Generate QT</button>`
         : '';
 
       return `
@@ -961,18 +962,19 @@
     }).join('');
   }
 
-  function openTweetFromWinner(item, event) {
-    if (item.tweet1_id) {
-      const url = `https://x.com/EVBettors/status/${item.tweet1_id}`;
-      window.open(url, '_blank');
+  function openTweetFromWinner(tweet1Id) {
+    if (tweet1Id) {
+      window.open(`https://x.com/EVBettors/status/${tweet1Id}`, '_blank');
     }
   }
 
   // ── QT modal ───────────────────────────────────────────────────────────────
   let currentQtItem = null;
 
-  function openQtModal(itemJson) {
-    const item = JSON.parse(itemJson);
+  function openQtModal(idx) {
+    const visibleItems = winnersSubtab === 'won' ? winnersData.filter(i => i.won) : winnersData;
+    const item = visibleItems[idx];
+    if (!item) return;
     currentQtItem = item;
     document.getElementById('qtModalMarket').textContent = item.market_title || 'Resolved position';
     document.getElementById('qtOriginalPreview').textContent = item.tweet1;
