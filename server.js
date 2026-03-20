@@ -511,8 +511,7 @@ app.get('/api/winners', async (req, res) => {
     }
 
     // Match a DB item to a Polymarket position
-    // Strategy: try condition_id exact match first, then fuzzy title+price matching
-    // Uses market_title, tweet1 text, and entry_price as signals (none required)
+    // Strategy: condition_id exact match → market_title fuzzy → tweet1 fuzzy (noise-filtered)
     function matchPosition(item, positions) {
       // 1) Exact match by condition_id (most reliable)
       if (item.condition_id) {
@@ -522,30 +521,55 @@ app.get('/api/winners', async (req, res) => {
         if (exact) return exact;
       }
 
-      // 2) Fuzzy match: extract keywords from market_title, falling back to tweet1
-      const titleSource = item.market_title || item.tweet1 || '';
-      const keywords = titleSource.toLowerCase()
-        .replace(/[^a-z0-9\s.\-]/g, ' ').split(/\s+/).filter(w => w.length > 2);
-      if (!keywords.length) return null;
-
       const targetPrice = item.entry_price ? item.entry_price / 100 : null;
 
-      let best = null, bestScore = 0;
-      for (const pos of positions) {
-        const posTitle = (pos.market || pos.title || pos.question || '').toLowerCase();
-        const hits = keywords.filter(w => posTitle.includes(w)).length;
-        let score = keywords.length ? hits / keywords.length : 0;
-
-        // Price match is a bonus signal, not a hard filter
-        if (targetPrice != null && pos.avgPrice != null) {
-          const priceDiff = Math.abs(pos.avgPrice - targetPrice);
-          if (priceDiff <= 0.03) score += 0.15;      // tight match: strong bonus
-          else if (priceDiff <= 0.08) score += 0.05;  // loose match: small bonus
-        }
-
-        if (score > bestScore && score >= 0.20) { bestScore = score; best = pos; }
+      function toKeywords(text) {
+        return text.toLowerCase().replace(/[^a-z0-9\s.\-]/g, ' ').split(/\s+/).filter(w => w.length > 2);
       }
-      return best;
+
+      function findBest(keywords, threshold) {
+        if (!keywords.length) return null;
+        let best = null, bestScore = 0;
+        for (const pos of positions) {
+          const posTitle = (pos.market || pos.title || pos.question || '').toLowerCase();
+          const hits = keywords.filter(w => posTitle.includes(w)).length;
+          let score = keywords.length ? hits / keywords.length : 0;
+          // Price match is a bonus signal, not a hard filter
+          if (targetPrice != null && pos.avgPrice != null) {
+            const priceDiff = Math.abs(pos.avgPrice - targetPrice);
+            if (priceDiff <= 0.03) score += 0.15;
+            else if (priceDiff <= 0.08) score += 0.05;
+          }
+          if (score > bestScore && score >= threshold) { bestScore = score; best = pos; }
+        }
+        return best;
+      }
+
+      // 2) Try market_title first (specific, few keywords, high signal)
+      if (item.market_title) {
+        const result = findBest(toKeywords(item.market_title), 0.20);
+        if (result) return result;
+      }
+
+      // 3) Fall back to tweet1 text with noise words removed
+      // Tweet text has lots of irrelevant words (polymarket, prediction, insiders, etc.)
+      // that dilute the keyword match score — filter them out
+      if (item.tweet1) {
+        const noise = new Set([
+          'the','this','that','with','from','for','and','was','has','had','are','its',
+          'polymarket','prediction','insiders','tool','oddsjam','score','insider',
+          'thread','below','here','what','says','why','how','breakdown','flagged',
+          'right','just','nuke','sharp','signal','play','bet','bets','betting',
+          'com','www','full','new','took','into','single','higher','across',
+          'opportunity','follow','tutorial','works','youtu','data','price',
+          'entry','current','slippage','trades','every','their','they','more'
+        ]);
+        const keywords = toKeywords(item.tweet1).filter(w => !noise.has(w));
+        const result = findBest(keywords, 0.15);
+        if (result) return result;
+      }
+
+      return null;
     }
 
     const annotated = posted.map(item => {
@@ -557,6 +581,8 @@ app.get('/api/winners', async (req, res) => {
         else if (pos.size > 0 && pos.currentValue >= pos.size * 0.99) won = true;
         else if (pos.winnings > 0) won = true;
       }
+      // Debug: log match results for troubleshooting
+      console.log(`[winners] Item ${item.id} "${(item.market_title || item.tweet1 || '').slice(0, 40)}..." → ${pos ? `matched "${(pos.market || pos.title || '').slice(0, 40)}" won=${won}` : 'NO MATCH'}`);
       return { ...item, position: pos, won };
     });
 
