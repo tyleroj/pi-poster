@@ -18,6 +18,10 @@ const PORT = process.env.PORT || 3000;
 const dataDir = process.env.DATA_DIR || path.join(__dirname, 'data');
 if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
 
+// Create images subdirectory for storing uploaded images
+const imagesDir = path.join(dataDir, 'images');
+if (!fs.existsSync(imagesDir)) fs.mkdirSync(imagesDir, { recursive: true });
+
 const db = new Database(path.join(dataDir, 'queue.db'));
 db.exec(`
   CREATE TABLE IF NOT EXISTS auth (
@@ -40,7 +44,11 @@ db.exec(`
     error        TEXT,
     created_at   INTEGER DEFAULT (unixepoch()),
     condition_id TEXT,
-    market_title TEXT
+    market_title TEXT,
+    slip_path    TEXT,
+    tool_path    TEXT,
+    is_quote_tweet INTEGER DEFAULT 0,
+    quote_tweet_id TEXT
   );
 `);
 
@@ -49,6 +57,10 @@ const qCols = db.prepare('PRAGMA table_info(queue)').all().map(c => c.name);
 if (!qCols.includes('condition_id')) db.exec('ALTER TABLE queue ADD COLUMN condition_id TEXT');
 if (!qCols.includes('market_title'))  db.exec('ALTER TABLE queue ADD COLUMN market_title TEXT');
 if (!qCols.includes('entry_price'))   db.exec('ALTER TABLE queue ADD COLUMN entry_price INTEGER');
+if (!qCols.includes('slip_path'))     db.exec('ALTER TABLE queue ADD COLUMN slip_path TEXT');
+if (!qCols.includes('tool_path'))     db.exec('ALTER TABLE queue ADD COLUMN tool_path TEXT');
+if (!qCols.includes('is_quote_tweet')) db.exec('ALTER TABLE queue ADD COLUMN is_quote_tweet INTEGER DEFAULT 0');
+if (!qCols.includes('quote_tweet_id')) db.exec('ALTER TABLE queue ADD COLUMN quote_tweet_id TEXT');
 
 // ── Middleware ────────────────────────────────────────────────────────────────
 app.use(express.static('public'));
@@ -201,6 +213,15 @@ async function uploadMedia(buffer, mimeType) {
   return mediaId;
 }
 
+// ── Helper: Save image to disk ─────────────────────────────────────────────────
+function saveImageToDisk(buffer, mimetype) {
+  const ext = mimetype === 'image/png' ? 'png' : mimetype === 'image/gif' ? 'gif' : 'jpg';
+  const filename = `${crypto.randomUUID()}.${ext}`;
+  const filepath = path.join(imagesDir, filename);
+  fs.writeFileSync(filepath, buffer);
+  return filename;
+}
+
 // ── Post a thread ─────────────────────────────────────────────────────────────
 // slipFile / toolFile are optional { buffer, mimetype } objects
 // Returns { tweet1Id, tweet2Id, mediaErrors[] }
@@ -242,6 +263,47 @@ async function postThread(tweet1, tweet2, slipFile, toolFile) {
   if (!r2.ok) throw new Error(d2.detail || d2.title || JSON.stringify(d2));
 
   return { tweet1Id, tweet2Id: d2.data.id, mediaErrors };
+}
+
+// ── Post a single quote tweet ──────────────────────────────────────────────────
+// tweetText: the quote tweet text
+// quoteOfId: the tweet ID to quote
+// slipFile / toolFile: optional { buffer, mimetype } objects
+// Returns { tweet1Id, mediaErrors[] }
+async function postQuoteTweet(tweetText, quoteOfId, slipFile, toolFile) {
+  const tweetBody = { text: tweetText };
+  const mediaErrors = [];
+
+  if (slipFile?.buffer) {
+    try {
+      const mediaId = await uploadMedia(slipFile.buffer, slipFile.mimetype);
+      tweetBody.media = { media_ids: [mediaId] };
+    } catch (e) {
+      console.error('[media] Slip upload failed:', e.message);
+      mediaErrors.push(`Slip: ${e.message}`);
+    }
+  }
+
+  if (toolFile?.buffer) {
+    try {
+      const mediaId = await uploadMedia(toolFile.buffer, toolFile.mimetype);
+      if (tweetBody.media) {
+        tweetBody.media.media_ids.push(mediaId);
+      } else {
+        tweetBody.media = { media_ids: [mediaId] };
+      }
+    } catch (e) {
+      console.error('[media] Tool card upload failed:', e.message);
+      mediaErrors.push(`Tool card: ${e.message}`);
+    }
+  }
+
+  tweetBody.quote_tweet_id = quoteOfId;
+  const r = await twitterFetch('POST', '/tweets', tweetBody);
+  const d = await r.json();
+  if (!r.ok) throw new Error(d.detail || d.title || JSON.stringify(d));
+
+  return { tweet1Id: d.data.id, mediaErrors };
 }
 
 // ── OAuth 1.0a 3-legged auth routes ──────────────────────────────────────────
@@ -784,13 +846,19 @@ app.post('/post/now', upload.fields([
 
     console.log(`[post/now] slip=${slipFile ? slipFile.originalname + ' ' + Math.round(slipFile.size/1024) + 'KB' : 'none'}, tool=${toolFile ? toolFile.originalname + ' ' + Math.round(toolFile.size/1024) + 'KB' : 'none'}`);
 
+    // Save images to disk if provided
+    let slipPath = null, toolPath = null;
+    if (slipFile) slipPath = saveImageToDisk(slipFile.buffer, slipFile.mimetype);
+    if (toolFile) toolPath = saveImageToDisk(toolFile.buffer, toolFile.mimetype);
+
     const result = await postThread(tweet1, tweet2, slipFile, toolFile);
     // Save to history so the Winners tab can track it
-    db.prepare(`INSERT INTO queue (tweet1, tweet2, scheduled_at, status, posted_at, tweet1_id, tweet2_id, market_title, entry_price)
-                VALUES (?,?,?,?,?,?,?,?,?)`)
+    db.prepare(`INSERT INTO queue (tweet1, tweet2, scheduled_at, status, posted_at, tweet1_id, tweet2_id, market_title, entry_price, slip_path, tool_path)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?)`)
       .run(tweet1, tweet2, Date.now(), 'posted', Date.now(),
            result.tweet1Id, result.tweet2Id,
-           market_title || null, entry_price ? parseInt(entry_price, 10) : null);
+           market_title || null, entry_price ? parseInt(entry_price, 10) : null,
+           slipPath, toolPath);
     res.json({ success: true, ...result });
   } catch (err) {
     console.error('Post error:', err);
@@ -798,11 +866,74 @@ app.post('/post/now', upload.fields([
   }
 });
 
+// ── Post Quote Tweet immediately ──────────────────────────────────────────────
+app.post('/post/qt-now', upload.fields([
+  { name: 'slip',     maxCount: 1 },
+  { name: 'toolCard', maxCount: 1 }
+]), async (req, res) => {
+  try {
+    const { tweet1, quote_tweet_id, market_title, entry_price } = req.body;
+    if (!tweet1 || !quote_tweet_id) return res.status(400).json({ error: 'Tweet text and quote_tweet_id required' });
+
+    const slipFile  = req.files?.['slip']?.[0]     || null;
+    const toolFile  = req.files?.['toolCard']?.[0] || null;
+
+    let slipPath = null, toolPath = null;
+    if (slipFile) slipPath = saveImageToDisk(slipFile.buffer, slipFile.mimetype);
+    if (toolFile) toolPath = saveImageToDisk(toolFile.buffer, toolFile.mimetype);
+
+    const result = await postQuoteTweet(tweet1, quote_tweet_id, slipFile, toolFile);
+
+    // Save to history
+    db.prepare(`INSERT INTO queue (tweet1, tweet2, scheduled_at, status, posted_at, tweet1_id, market_title, entry_price, slip_path, tool_path, is_quote_tweet, quote_tweet_id)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`)
+      .run(tweet1, '', Date.now(), 'posted', Date.now(),
+           result.tweet1Id,
+           market_title || null, entry_price ? parseInt(entry_price, 10) : null,
+           slipPath, toolPath, 1, quote_tweet_id);
+
+    res.json({ success: true, ...result });
+  } catch (err) {
+    console.error('Post QT error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Serve stored images ───────────────────────────────────────────────────────
+app.get('/api/images/:filename', (req, res) => {
+  try {
+    const filename = req.params.filename;
+    // Sanitize filename to prevent directory traversal
+    if (filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
+      return res.status(400).json({ error: 'Invalid filename' });
+    }
+    const filepath = path.join(imagesDir, filename);
+    if (!fs.existsSync(filepath)) {
+      return res.status(404).json({ error: 'Image not found' });
+    }
+    res.sendFile(filepath);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Queue routes ──────────────────────────────────────────────────────────────
-app.post('/queue/add', async (req, res) => {
+// Add a regular thread to queue (multipart: slip + toolCard images)
+app.post('/queue/add', upload.fields([
+  { name: 'slip',     maxCount: 1 },
+  { name: 'toolCard', maxCount: 1 }
+]), async (req, res) => {
   try {
     const { tweet1, tweet2, market_title, entry_price } = req.body;
     if (!tweet1 || !tweet2) return res.status(400).json({ error: 'Both tweets required' });
+
+    const slipFile  = req.files?.['slip']?.[0]     || null;
+    const toolFile  = req.files?.['toolCard']?.[0] || null;
+
+    // Save images to disk if provided
+    let slipPath = null, toolPath = null;
+    if (slipFile) slipPath = saveImageToDisk(slipFile.buffer, slipFile.mimetype);
+    if (toolFile) toolPath = saveImageToDisk(toolFile.buffer, toolFile.mimetype);
 
     // Schedule 15-20 min after the latest pending item (or from now if queue empty)
     const latest = db.prepare(`SELECT MAX(scheduled_at) as t FROM queue WHERE status='pending'`).get();
@@ -810,8 +941,40 @@ app.post('/queue/add', async (req, res) => {
     const delay  = (15 + Math.floor(Math.random() * 6)) * 60 * 1000;
     const scheduledAt = base + delay;
 
-    const info = db.prepare('INSERT INTO queue (tweet1, tweet2, scheduled_at, market_title, entry_price) VALUES (?,?,?,?,?)')
-      .run(tweet1, tweet2, scheduledAt, market_title || null, entry_price ? parseInt(entry_price, 10) : null);
+    const info = db.prepare('INSERT INTO queue (tweet1, tweet2, scheduled_at, market_title, entry_price, slip_path, tool_path, is_quote_tweet) VALUES (?,?,?,?,?,?,?,?)')
+      .run(tweet1, tweet2, scheduledAt, market_title || null, entry_price ? parseInt(entry_price, 10) : null, slipPath, toolPath, 0);
+
+    res.json({ success: true, id: info.lastInsertRowid, scheduledAt });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Add a quote tweet to queue
+app.post('/queue/add-qt', upload.fields([
+  { name: 'slip',     maxCount: 1 },
+  { name: 'toolCard', maxCount: 1 }
+]), async (req, res) => {
+  try {
+    const { tweet1, quote_tweet_id, market_title, entry_price } = req.body;
+    if (!tweet1 || !quote_tweet_id) return res.status(400).json({ error: 'Tweet text and quote_tweet_id required' });
+
+    const slipFile  = req.files?.['slip']?.[0]     || null;
+    const toolFile  = req.files?.['toolCard']?.[0] || null;
+
+    // Save images to disk if provided
+    let slipPath = null, toolPath = null;
+    if (slipFile) slipPath = saveImageToDisk(slipFile.buffer, slipFile.mimetype);
+    if (toolFile) toolPath = saveImageToDisk(toolFile.buffer, toolFile.mimetype);
+
+    // Schedule 15-20 min after the latest pending item (or from now if queue empty)
+    const latest = db.prepare(`SELECT MAX(scheduled_at) as t FROM queue WHERE status='pending'`).get();
+    const base   = (latest?.t && latest.t > Date.now()) ? latest.t : Date.now();
+    const delay  = (15 + Math.floor(Math.random() * 6)) * 60 * 1000;
+    const scheduledAt = base + delay;
+
+    const info = db.prepare('INSERT INTO queue (tweet1, tweet2, scheduled_at, market_title, entry_price, slip_path, tool_path, is_quote_tweet, quote_tweet_id) VALUES (?,?,?,?,?,?,?,?,?)')
+      .run(tweet1, '', scheduledAt, market_title || null, entry_price ? parseInt(entry_price, 10) : null, slipPath, toolPath, 1, quote_tweet_id);
 
     res.json({ success: true, id: info.lastInsertRowid, scheduledAt });
   } catch (err) {
@@ -849,9 +1012,35 @@ async function processQueue() {
   for (const item of due) {
     try {
       db.prepare(`UPDATE queue SET status='posting' WHERE id=?`).run(item.id);
-      const { tweet1Id, tweet2Id } = await postThread(item.tweet1, item.tweet2);
-      db.prepare(`UPDATE queue SET status='posted', posted_at=?, tweet1_id=?, tweet2_id=? WHERE id=?`)
-        .run(Date.now(), tweet1Id, tweet2Id, item.id);
+
+      // Load images from disk if paths are stored
+      let slipFile = null, toolFile = null;
+      if (item.slip_path && fs.existsSync(path.join(imagesDir, item.slip_path))) {
+        const buffer = fs.readFileSync(path.join(imagesDir, item.slip_path));
+        const ext = path.extname(item.slip_path).toLowerCase();
+        const mimetype = ext === '.png' ? 'image/png' : ext === '.gif' ? 'image/gif' : 'image/jpeg';
+        slipFile = { buffer, mimetype };
+      }
+      if (item.tool_path && fs.existsSync(path.join(imagesDir, item.tool_path))) {
+        const buffer = fs.readFileSync(path.join(imagesDir, item.tool_path));
+        const ext = path.extname(item.tool_path).toLowerCase();
+        const mimetype = ext === '.png' ? 'image/png' : ext === '.gif' ? 'image/gif' : 'image/jpeg';
+        toolFile = { buffer, mimetype };
+      }
+
+      let result;
+      if (item.is_quote_tweet) {
+        // Post as a quote tweet
+        result = await postQuoteTweet(item.tweet1, item.quote_tweet_id, slipFile, toolFile);
+        db.prepare(`UPDATE queue SET status='posted', posted_at=?, tweet1_id=? WHERE id=?`)
+          .run(Date.now(), result.tweet1Id, item.id);
+      } else {
+        // Post as a regular thread
+        const { tweet1Id, tweet2Id } = await postThread(item.tweet1, item.tweet2, slipFile, toolFile);
+        db.prepare(`UPDATE queue SET status='posted', posted_at=?, tweet1_id=?, tweet2_id=? WHERE id=?`)
+          .run(Date.now(), tweet1Id, tweet2Id, item.id);
+      }
+
       console.log(`[queue] Posted item ${item.id}`);
     } catch (err) {
       console.error(`[queue] Failed item ${item.id}:`, err.message);

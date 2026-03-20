@@ -476,13 +476,39 @@
       font-size: 12px; color: #64748b; font-weight: 600; margin-bottom: 8px;
       font-style: italic;
     }
+    .winner-slip-img {
+      width: 100%;
+      max-height: 200px;
+      object-fit: cover;
+      border-radius: 12px;
+      cursor: pointer;
+      border: 1px solid rgba(255,255,255,0.08);
+      transition: border-color 0.2s, transform 0.15s;
+      margin-bottom: 12px;
+      display: block;
+    }
+    .winner-slip-img:hover {
+      border-color: rgba(95,255,176,0.4);
+      transform: scale(1.01);
+    }
     .winner-tweet-preview {
       font-size: 13px; color: #94a3b8; line-height: 1.55;
       white-space: pre-wrap; margin-bottom: 12px;
       display: -webkit-box; -webkit-line-clamp: 3;
       -webkit-box-orient: vertical; overflow: hidden;
     }
-    .winner-actions { display: flex; gap: 6px; }
+    .winner-actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+    .winner-tweet-link {
+      font-size: 12px; font-weight: 600; color: #1d9bf0;
+      background: rgba(29,155,240,0.1); border: 1px solid rgba(29,155,240,0.3);
+      padding: 6px 12px; border-radius: 8px;
+      cursor: pointer; transition: all 0.15s;
+      text-decoration: none; display: inline-block;
+    }
+    .winner-tweet-link:hover {
+      background: rgba(29,155,240,0.15);
+      border-color: rgba(29,155,240,0.5);
+    }
     .qt-btn {
       background: linear-gradient(135deg, #5fffb0 0%, #3dd68c 100%);
       border: none; border-radius: 8px; color: #060810;
@@ -524,20 +550,31 @@
       transition: border-color 0.2s; display: none; margin-bottom: 14px;
     }
     .qt-result:focus { border-color: rgba(95,255,176,0.45); }
-    .qt-modal-actions { display: flex; gap: 8px; }
+    .qt-modal-actions { display: flex; gap: 8px; flex-wrap: wrap; }
     .qt-queue-btn {
       flex: 1; background: linear-gradient(135deg, #5fffb0 0%, #3dd68c 100%);
       border: none; border-radius: 10px; color: #060810;
       font-size: 14px; font-weight: 700; padding: 11px; cursor: pointer;
-      display: none;
+      display: none; min-width: 120px;
     }
     .qt-queue-btn:hover { opacity: 0.9; }
+    .qt-queue-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+    .qt-post-btn {
+      flex: 1; background: #1d9bf0;
+      border: none; border-radius: 10px; color: #fff;
+      font-size: 14px; font-weight: 700; padding: 11px; cursor: pointer;
+      display: none; min-width: 120px;
+      transition: opacity 0.2s, transform 0.1s;
+    }
+    .qt-post-btn:hover { opacity: 0.88; transform: translateY(-1px); }
+    .qt-post-btn:active { transform: translateY(0); }
+    .qt-post-btn:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
     .qt-cancel-btn {
       flex: 1; background: rgba(255,255,255,0.04);
       border: 1px solid rgba(255,255,255,0.08);
       border-radius: 10px; color: #64748b;
       font-size: 14px; font-weight: 600; padding: 11px; cursor: pointer;
-      transition: border-color 0.15s, color 0.15s;
+      transition: border-color 0.15s, color 0.15s; min-width: 100px;
     }
     .qt-cancel-btn:hover { border-color: rgba(255,255,255,0.18); color: #94a3b8; }
 
@@ -569,6 +606,13 @@
     .queue-time { font-size: 12px; color: #5fffb0; font-weight: 600; }
     .queue-status { font-size: 11px; color: #475569; text-transform: uppercase; letter-spacing: 0.5px; }
     .queue-status.failed { color: #f87171; }
+    .queue-badges { display: flex; gap: 4px; align-items: center; }
+    .queue-image-badge {
+      font-size: 10px; color: #64748b;
+      background: rgba(255,255,255,0.06);
+      padding: 2px 6px; border-radius: 4px;
+      font-weight: 600;
+    }
 
     .queue-tweet-preview {
       font-size: 13px; color: #64748b; line-height: 1.5;
@@ -676,6 +720,7 @@
     <div class="qt-modal-actions">
       <button class="qt-cancel-btn" onclick="closeQtModal()">Cancel</button>
       <button class="qt-queue-btn" id="qtQueueBtn" onclick="queueQT()">Add QT to Queue</button>
+      <button class="qt-post-btn" id="qtPostBtn" onclick="postQTNow()">Post Now 𝕏</button>
     </div>
   </div>
 </div>
@@ -882,9 +927,23 @@
         : '—';
       const market = item.market_title ? `<div class="winner-market">${escHtml(item.market_title)}</div>` : '';
       const badge  = item.won ? '<span class="winner-badge">🏆 Won</span>' : '<span class="winner-badge pending">⏳ Pending</span>';
-      const qtBtn  = item.won
+
+      // Show bet slip image if available, otherwise show tweet preview
+      let slipSection = '';
+      if (item.slip_path) {
+        slipSection = `<img class="winner-slip-img" src="/api/images/${encodeURIComponent(item.slip_path)}" alt="Bet Slip" onclick="openTweetFromWinner(${JSON.stringify(item)}, event)" />`;
+      } else {
+        slipSection = `<div class="winner-tweet-preview">${escHtml(item.tweet1)}</div>`;
+      }
+
+      // Create tweet link
+      const tweetUrl = item.tweet1_id ? `https://x.com/EVBettors/status/${item.tweet1_id}` : null;
+      const tweetLink = tweetUrl ? `<a class="winner-tweet-link" href="${tweetUrl}" target="_blank" rel="noopener">View Tweet</a>` : '';
+
+      const qtBtn = item.won
         ? `<button class="qt-btn" onclick='openQtModal(${JSON.stringify(JSON.stringify(item))})'>✍️ Generate QT</button>`
         : '';
+
       return `
         <div class="winner-item ${item.won ? 'won' : ''}">
           <div class="winner-item-header">
@@ -892,10 +951,20 @@
             ${badge}
           </div>
           ${market}
-          <div class="winner-tweet-preview">${escHtml(item.tweet1)}</div>
-          <div class="winner-actions">${qtBtn}</div>
+          ${slipSection}
+          <div class="winner-actions">
+            ${tweetLink}
+            ${qtBtn}
+          </div>
         </div>`;
     }).join('');
+  }
+
+  function openTweetFromWinner(item, event) {
+    if (item.tweet1_id) {
+      const url = `https://x.com/EVBettors/status/${item.tweet1_id}`;
+      window.open(url, '_blank');
+    }
   }
 
   // ── QT modal ───────────────────────────────────────────────────────────────
@@ -909,6 +978,7 @@
     document.getElementById('qtLoading').style.display = 'none';
     document.getElementById('qtResultText').style.display = 'none';
     document.getElementById('qtQueueBtn').style.display = 'none';
+    document.getElementById('qtPostBtn').style.display = 'none';
     document.getElementById('qtResultText').value = '';
     document.getElementById('qtModalBg').classList.add('open');
     generateQT(item);
@@ -923,6 +993,7 @@
     document.getElementById('qtLoading').style.display = 'block';
     document.getElementById('qtResultText').style.display = 'none';
     document.getElementById('qtQueueBtn').style.display = 'none';
+    document.getElementById('qtPostBtn').style.display = 'none';
     try {
       const pos = item.position || {};
       const entryC = pos.avgPrice ? Math.round(pos.avgPrice * 100) : '?';
@@ -940,6 +1011,7 @@
       document.getElementById('qtResultText').value = data.qt;
       document.getElementById('qtResultText').style.display = 'block';
       document.getElementById('qtQueueBtn').style.display = 'block';
+      document.getElementById('qtPostBtn').style.display = 'block';
     } catch (err) {
       document.getElementById('qtResultText').value = 'Error: ' + err.message;
       document.getElementById('qtResultText').style.display = 'block';
@@ -952,21 +1024,16 @@
     if (!currentQtItem) return;
     const qtText = document.getElementById('qtResultText').value.trim();
     if (!qtText) return;
-    // QT is a single tweet — we still need tweet1 + tweet2, so tweet2 is the QT and tweet1 is a stub referencing the original
-    const tweet1Id = currentQtItem.tweet1_id;
-    const qtFullText = tweet1Id
-      ? `${qtText}\n\nhttps://twitter.com/i/status/${tweet1Id}`
-      : qtText;
 
     const btn = document.getElementById('qtQueueBtn');
     btn.disabled = true; btn.textContent = 'Adding...';
     try {
-      const data = await fetch('/queue/add', {
+      const data = await fetch('/queue/add-qt', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          tweet1: qtFullText,
-          tweet2: '.',  // placeholder — user can remove before posting
+          tweet1: qtText,
+          quote_tweet_id: currentQtItem.tweet1_id,
           market_title: currentQtItem.market_title || null
         })
       }).then(r => r.json());
@@ -979,6 +1046,34 @@
       showToast(err.message, 'error');
     } finally {
       btn.disabled = false; btn.textContent = 'Add QT to Queue';
+    }
+  }
+
+  async function postQTNow() {
+    if (!currentQtItem) return;
+    const qtText = document.getElementById('qtResultText').value.trim();
+    if (!qtText) return;
+
+    const btn = document.getElementById('qtPostBtn');
+    btn.disabled = true; btn.textContent = 'Posting...';
+    try {
+      const data = await fetch('/post/qt-now', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tweet1: qtText,
+          quote_tweet_id: currentQtItem.tweet1_id,
+          market_title: currentQtItem.market_title || null
+        })
+      }).then(r => r.json());
+      if (data.error) throw new Error(data.error);
+      showToast('Quote tweet posted! 🎉', 'success');
+      closeQtModal();
+      loadWinners();
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      btn.disabled = false; btn.textContent = 'Post Now 𝕏';
     }
   }
 
@@ -1260,13 +1355,19 @@
     const btn = document.getElementById('queueBtn');
     btn.disabled = true; btn.textContent = 'Adding...';
     try {
+      const fd = new FormData();
+      fd.append('tweet1', tweet1);
+      fd.append('tweet2', tweet2);
+      if (generatedMarketTitle) fd.append('market_title', generatedMarketTitle);
+      if (generatedEntryPrice)  fd.append('entry_price',  generatedEntryPrice);
+      const slipFile = document.getElementById('slipInput').files[0];
+      const toolFile = document.getElementById('toolInput').files[0];
+      if (slipFile) fd.append('slip', slipFile);
+      if (toolFile) fd.append('toolCard', toolFile);
+
       const data = await fetch('/queue/add', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tweet1, tweet2,
-          market_title: generatedMarketTitle || null,
-          entry_price:  generatedEntryPrice  || null
-        })
+        method: 'POST',
+        body: fd
       }).then(r => r.json());
       if (data.error) throw new Error(data.error);
 
@@ -1296,11 +1397,29 @@
       const timeStr = t.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' at ' +
                       t.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       const isFailed = item.status === 'failed';
+
+      // Show image badge if images attached
+      let imageBadge = '';
+      if (item.slip_path || item.tool_path) {
+        imageBadge = '<span class="queue-image-badge">📸 Image</span>';
+      }
+
+      // Show QT badge if quote tweet
+      let qtBadge = '';
+      if (item.is_quote_tweet) {
+        qtBadge = '<span class="queue-image-badge">QT</span>';
+      }
+
+      const badges = imageBadge + qtBadge;
+
       return `
         <div class="queue-item">
           <div class="queue-item-header">
             <div class="queue-time">${timeStr}</div>
-            <div class="queue-status ${isFailed ? 'failed' : ''}">${isFailed ? '✕ ' + (item.error || 'failed') : 'Pending'}</div>
+            <div class="queue-badges">
+              ${badges}
+              <div class="queue-status ${isFailed ? 'failed' : ''}">${isFailed ? '✕ ' + (item.error || 'failed') : 'Pending'}</div>
+            </div>
           </div>
           <div class="queue-tweet-preview">${escHtml(item.tweet1)}</div>
           <div class="queue-actions">
@@ -1357,7 +1476,6 @@
 
   checkAuth();
   loadQueue();
-  fetchPositions(); // pre-load positions for instant matching
   setInterval(loadQueue, 60_000);
 </script>
 </body>
