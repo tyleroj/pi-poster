@@ -729,6 +729,7 @@
 <div class="tab-nav glass">
   <button class="tab-btn active" id="tabBtnGenerate" onclick="switchTab('generate')">⚡ Generate</button>
   <button class="tab-btn" id="tabBtnWinners" onclick="switchTab('winners')">🏆 Winners</button>
+  <button class="tab-btn" id="tabBtnVideo" onclick="switchTab('video')">🎬 Video Test</button>
 </div>
 
 <!-- Generate tab -->
@@ -874,13 +875,66 @@
 </div>
 </div><!-- end tabWinners -->
 
+<!-- Video Test tab -->
+<div id="tabVideo" style="display:none;">
+<div class="glass" style="max-width:600px;width:100%;padding:28px 24px;">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+    <span style="font-size:18px;font-weight:700;color:#e2e8f0;">Video Upload Test</span>
+    <span style="font-size:11px;color:rgba(255,255,255,0.35);font-weight:500;">X API v2 Chunked Upload</span>
+  </div>
+
+  <p style="font-size:13px;color:rgba(255,255,255,0.5);margin-bottom:18px;line-height:1.5;">
+    Test video uploading via the Twitter/X API v2 chunked media pipeline. Select a video file (MP4 recommended, max 512MB / 140s), optionally customize the tweet text, and hit upload. Each step will be logged in real time below.
+  </p>
+
+  <!-- Video file input -->
+  <div class="upload-zone" id="videoZone" onclick="document.getElementById('videoInput').click()" style="margin-bottom:16px;min-height:80px;">
+    <input type="file" id="videoInput" accept="video/mp4,video/quicktime,video/x-m4v,video/webm" hidden />
+    <div class="upload-placeholder" id="videoPlaceholder">
+      <div style="font-size:24px;">🎬</div>
+      <div>Drop or click to select video</div>
+      <div style="font-size:11px;color:rgba(255,255,255,0.3);margin-top:4px;">MP4, MOV, M4V, WebM — max 512MB</div>
+    </div>
+    <div id="videoFileInfo" style="display:none;font-size:13px;color:#5fffb0;font-weight:600;"></div>
+  </div>
+
+  <!-- Tweet text -->
+  <textarea id="videoTweetText" class="tweet-textarea" rows="2" placeholder="Tweet text (optional — defaults to test message)" style="margin-bottom:16px;width:100%;"></textarea>
+
+  <!-- Upload button -->
+  <button class="post-btn" id="videoUploadBtn" onclick="testVideoUpload()" style="width:100%;margin-bottom:20px;">
+    Upload & Tweet Video
+  </button>
+
+  <!-- Progress log -->
+  <div id="videoLog" style="display:none;">
+    <div style="font-size:12px;font-weight:700;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;">Upload Progress</div>
+    <div id="videoLogEntries" style="font-family:'SF Mono',Monaco,Consolas,monospace;font-size:12px;line-height:1.8;color:rgba(255,255,255,0.6);max-height:400px;overflow-y:auto;padding:12px;background:rgba(0,0,0,0.3);border-radius:8px;border:1px solid rgba(255,255,255,0.06);"></div>
+  </div>
+
+  <!-- Result -->
+  <div id="videoResult" style="display:none;margin-top:16px;padding:14px;border-radius:10px;border:1px solid rgba(95,255,176,0.3);background:rgba(95,255,176,0.05);">
+    <div style="font-size:13px;font-weight:700;color:#5fffb0;margin-bottom:6px;">Tweet Posted</div>
+    <a id="videoResultLink" href="#" target="_blank" rel="noopener" style="color:#1d9bf0;font-size:13px;text-decoration:none;font-weight:600;"></a>
+  </div>
+
+  <!-- Error -->
+  <div id="videoError" style="display:none;margin-top:16px;padding:14px;border-radius:10px;border:1px solid rgba(248,113,113,0.3);background:rgba(248,113,113,0.05);">
+    <div style="font-size:13px;font-weight:700;color:#f87171;margin-bottom:6px;">Upload Failed</div>
+    <div id="videoErrorMsg" style="font-size:12px;color:rgba(255,255,255,0.6);"></div>
+  </div>
+</div>
+</div><!-- end tabVideo -->
+
 <script>
   // ── Tabs ──────────────────────────────────────────────────────────────────
   function switchTab(tab) {
     document.getElementById('tabGenerate').style.display = tab === 'generate' ? '' : 'none';
     document.getElementById('tabWinners').style.display  = tab === 'winners'  ? '' : 'none';
+    document.getElementById('tabVideo').style.display    = tab === 'video'    ? '' : 'none';
     document.getElementById('tabBtnGenerate').classList.toggle('active', tab === 'generate');
     document.getElementById('tabBtnWinners').classList.toggle('active',  tab === 'winners');
+    document.getElementById('tabBtnVideo').classList.toggle('active',    tab === 'video');
     if (tab === 'winners') loadWinners();
   }
 
@@ -1474,6 +1528,87 @@
   // ── Utility ────────────────────────────────────────────────────────────────
   function escHtml(s) {
     return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  // ── Video Test ─────────────────────────────────────────────────────────────
+  let videoFile = null;
+
+  document.getElementById('videoInput').addEventListener('change', () => {
+    const input = document.getElementById('videoInput');
+    const file = input.files[0];
+    if (!file) return;
+    videoFile = file;
+    const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
+    document.getElementById('videoPlaceholder').style.display = 'none';
+    const info = document.getElementById('videoFileInfo');
+    info.textContent = `${file.name} (${sizeMB} MB, ${file.type})`;
+    info.style.display = 'block';
+  });
+
+  async function testVideoUpload() {
+    const input = document.getElementById('videoInput');
+    const file = input.files[0];
+    if (!file) { showToast('Select a video file first', 'error'); return; }
+    if (!isConnected) { showToast('Connect your Twitter account first', 'error'); return; }
+
+    const btn     = document.getElementById('videoUploadBtn');
+    const logDiv  = document.getElementById('videoLog');
+    const entries = document.getElementById('videoLogEntries');
+    const result  = document.getElementById('videoResult');
+    const errDiv  = document.getElementById('videoError');
+
+    btn.disabled = true;
+    btn.textContent = 'Uploading...';
+    logDiv.style.display = 'block';
+    result.style.display = 'none';
+    errDiv.style.display = 'none';
+    entries.innerHTML = '';
+
+    function addLog(step, detail, color) {
+      const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      const c = color || (step === 'ERROR' ? '#f87171' : step === 'SUCCESS' ? '#5fffb0' : 'rgba(255,255,255,0.6)');
+      entries.innerHTML += `<div><span style="color:rgba(255,255,255,0.3)">${time}</span> <span style="color:${c};font-weight:700">[${step}]</span> ${escHtml(detail)}</div>`;
+      entries.scrollTop = entries.scrollHeight;
+    }
+
+    addLog('START', `Uploading ${file.name} (${(file.size / (1024*1024)).toFixed(1)}MB)...`);
+
+    try {
+      const fd = new FormData();
+      fd.append('video', file);
+      const tweetText = document.getElementById('videoTweetText').value.trim();
+      if (tweetText) fd.append('text', tweetText);
+
+      addLog('UPLOAD', 'Sending to server (this may take a while for large files)...');
+
+      const resp = await fetch('/test/video-tweet', { method: 'POST', body: fd });
+      const data = await resp.json();
+
+      // Replay server-side steps into the log
+      if (data.steps) {
+        data.steps.forEach(s => addLog(s.step, s.detail, s.step === 'ERROR' ? '#f87171' : s.step === 'SUCCESS' ? '#5fffb0' : null));
+      }
+
+      if (data.success) {
+        result.style.display = 'block';
+        const link = document.getElementById('videoResultLink');
+        link.href = data.tweetUrl;
+        link.textContent = data.tweetUrl;
+        showToast('Video tweet posted!', 'success');
+      } else {
+        errDiv.style.display = 'block';
+        document.getElementById('videoErrorMsg').textContent = data.error || 'Unknown error';
+        showToast('Video upload failed', 'error');
+      }
+    } catch (err) {
+      addLog('ERROR', err.message, '#f87171');
+      errDiv.style.display = 'block';
+      document.getElementById('videoErrorMsg').textContent = err.message;
+      showToast('Video upload failed', 'error');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Upload & Tweet Video';
+    }
   }
 
   // ── Init ───────────────────────────────────────────────────────────────────

@@ -76,6 +76,11 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 }
 });
+// Separate multer instance for video uploads (up to 512MB)
+const uploadVideo = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 512 * 1024 * 1024 }
+});
 
 // ── Twitter config ────────────────────────────────────────────────────────────
 const TWITTER_API_KEY    = process.env.TWITTER_CLIENT_ID;      // OAuth 1.0a consumer key
@@ -210,6 +215,106 @@ async function uploadMedia(buffer, mimeType) {
   await postV2JSON(finUrl, finAuth);
 
   console.log(`[media] Upload complete: media_id=${mediaId}`);
+  return mediaId;
+}
+
+// ── Upload video media via X API v2 (chunked + processing poll) ──────────────
+// Returns mediaId once processing is complete and ready to attach to a tweet.
+// onProgress is an optional callback: (step, detail) => void
+const CHUNK_SIZE = 5 * 1024 * 1024; // 5 MB per chunk (Twitter recommendation)
+
+async function uploadVideoMedia(buffer, mimeType, onProgress) {
+  const { token, secret } = getStoredTokens();
+  const ext = mimeType === 'video/mp4' ? 'mp4' : mimeType === 'video/quicktime' ? 'mov' : 'mp4';
+  const category = 'tweet_video';
+  const log = (step, detail) => {
+    console.log(`[video] ${step}: ${detail}`);
+    if (onProgress) onProgress(step, detail);
+  };
+
+  log('START', `Uploading ${mimeType} (${(buffer.length / (1024 * 1024)).toFixed(1)}MB) via v2 chunked`);
+
+  // ── Step 1: INITIALIZE ──
+  const initUrl  = `${MEDIA_BASE}/initialize`;
+  const initAuth = oauth1Header('POST', initUrl, token, secret);
+  const initRes  = await postV2JSON(initUrl, initAuth, {
+    media_type:     mimeType,
+    total_bytes:    buffer.length,
+    media_category: category
+  });
+  const mediaId = initRes.data?.id || initRes.media_id_string || initRes.id;
+  if (!mediaId) throw new Error('INIT failed — no media_id: ' + JSON.stringify(initRes));
+  log('INIT', `media_id=${mediaId}`);
+
+  // ── Step 2: APPEND (chunked — split buffer into 5MB segments) ──
+  const totalChunks = Math.ceil(buffer.length / CHUNK_SIZE);
+  log('APPEND', `Splitting into ${totalChunks} chunk(s) of up to ${CHUNK_SIZE / (1024*1024)}MB`);
+
+  for (let i = 0; i < totalChunks; i++) {
+    const start = i * CHUNK_SIZE;
+    const end   = Math.min(start + CHUNK_SIZE, buffer.length);
+    const chunk = buffer.slice(start, end);
+
+    const appendUrl  = `${MEDIA_BASE}/${mediaId}/append`;
+    const appendAuth = oauth1Header('POST', appendUrl, token, secret);
+    const appendFd   = new FormDataLib();
+    appendFd.append('segment_index', String(i));
+    appendFd.append('media', chunk, { filename: `video_chunk_${i}.${ext}`, contentType: mimeType });
+    await postMultipart(appendUrl, appendAuth, appendFd);
+    log('APPEND', `Chunk ${i + 1}/${totalChunks} uploaded (${Math.round(chunk.length / 1024)}KB)`);
+  }
+
+  // ── Step 3: FINALIZE ──
+  const finUrl  = `${MEDIA_BASE}/${mediaId}/finalize`;
+  const finAuth = oauth1Header('POST', finUrl, token, secret);
+  const finRes  = await postV2JSON(finUrl, finAuth);
+  log('FINALIZE', JSON.stringify(finRes).slice(0, 300));
+
+  // ── Step 4: POLL for processing completion (video requires transcoding) ──
+  // The finalize response (or subsequent status checks) contain processing_info
+  // with state: pending | in_progress | succeeded | failed
+  let processingInfo = finRes.processing_info || finRes.data?.processing_info || null;
+
+  if (processingInfo) {
+    log('PROCESSING', `Initial state: ${processingInfo.state}`);
+    const maxPolls = 60; // up to ~5 minutes of polling
+    let polls = 0;
+
+    while (processingInfo && processingInfo.state !== 'succeeded' && processingInfo.state !== 'failed') {
+      if (polls++ >= maxPolls) throw new Error('Video processing timed out after 60 polls');
+
+      const waitSec = processingInfo.check_after_secs || 5;
+      log('PROCESSING', `State: ${processingInfo.state}, waiting ${waitSec}s (poll ${polls}/${maxPolls})...`);
+      await new Promise(r => setTimeout(r, waitSec * 1000));
+
+      // Poll status — GET with query params, OAuth signed
+      const statusUrl  = `${MEDIA_BASE}?command=STATUS&media_id=${mediaId}`;
+      const statusAuth = oauth1Header('GET', statusUrl, token, secret);
+      const statusRes  = await fetch(statusUrl, {
+        method: 'GET',
+        headers: { Authorization: statusAuth }
+      });
+      const statusText = await statusRes.text();
+      log('STATUS', `${statusRes.status}: ${statusText.slice(0, 300)}`);
+
+      if (!statusRes.ok) throw new Error(`STATUS check failed ${statusRes.status}: ${statusText.slice(0, 400)}`);
+
+      let statusData;
+      try { statusData = JSON.parse(statusText); } catch { statusData = {}; }
+      processingInfo = statusData.processing_info || statusData.data?.processing_info || null;
+    }
+
+    if (processingInfo?.state === 'failed') {
+      const errMsg = processingInfo.error?.message || processingInfo.error?.name || 'Unknown processing error';
+      throw new Error(`Video processing failed: ${errMsg}`);
+    }
+
+    log('PROCESSING', 'Video processing succeeded!');
+  } else {
+    log('PROCESSING', 'No processing_info returned — video may be ready immediately');
+  }
+
+  log('DONE', `Video upload complete: media_id=${mediaId}`);
   return mediaId;
 }
 
@@ -1102,6 +1207,54 @@ async function processQueue() {
   }
 }
 setInterval(processQueue, 60_000);
+
+// ── Video test endpoint ──────────────────────────────────────────────────────
+// Accepts a video file + optional tweet text, uploads via v2 chunked + processing poll,
+// then posts a tweet with the video attached.
+app.post('/test/video-tweet', uploadVideo.single('video'), async (req, res) => {
+  const steps = []; // accumulate progress for the response
+  try {
+    const file = req.file;
+    const tweetText = req.body.text || 'Video upload test via PI Poster';
+    if (!file) return res.status(400).json({ error: 'No video file provided' });
+
+    const allowedTypes = ['video/mp4', 'video/quicktime', 'video/x-m4v', 'video/webm'];
+    if (!allowedTypes.includes(file.mimetype)) {
+      return res.status(400).json({ error: `Unsupported video type: ${file.mimetype}. Use MP4, MOV, M4V, or WebM.` });
+    }
+
+    // 512MB max per Twitter docs
+    if (file.buffer.length > 512 * 1024 * 1024) {
+      return res.status(400).json({ error: 'Video exceeds 512MB limit' });
+    }
+
+    steps.push({ step: 'RECEIVED', detail: `${file.originalname} (${(file.buffer.length / (1024*1024)).toFixed(1)}MB, ${file.mimetype})` });
+
+    const mediaId = await uploadVideoMedia(file.buffer, file.mimetype, (step, detail) => {
+      steps.push({ step, detail });
+    });
+
+    steps.push({ step: 'TWEETING', detail: `Posting tweet with media_id=${mediaId}` });
+
+    // Post tweet with video attached
+    const tweetBody = {
+      text: tweetText,
+      media: { media_ids: [mediaId] }
+    };
+    const r = await twitterFetch('POST', '/tweets', tweetBody);
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || d.title || JSON.stringify(d));
+
+    const tweetId = d.data.id;
+    steps.push({ step: 'SUCCESS', detail: `Tweet posted! ID: ${tweetId} — https://x.com/EVBettors/status/${tweetId}` });
+
+    res.json({ success: true, tweetId, tweetUrl: `https://x.com/EVBettors/status/${tweetId}`, steps });
+  } catch (err) {
+    console.error('[video-test] Error:', err);
+    steps.push({ step: 'ERROR', detail: err.message });
+    res.status(500).json({ success: false, error: err.message, steps });
+  }
+});
 
 // Health check endpoint (for uptime monitors like UptimeRobot)
 app.get('/health', (req, res) => res.json({ status: 'ok', ts: Date.now() }));
