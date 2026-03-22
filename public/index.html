@@ -1786,8 +1786,17 @@
         `<span class="aff-cat-badge ${c}">${catColors[c] || ''} ${catLabels[c] || c}</span>`
       ).join('');
 
-      // Truncate long tweets for display
-      const displayText = t.text.length > 400 ? t.text.slice(0, 400) + '...' : t.text;
+      // Clean up RT prefix for display — strip "RT @username: " from the beginning
+      let cleanText = t.text;
+      if (t.is_retweet) {
+        cleanText = cleanText.replace(/^RT @\w+:\s*/, '');
+      }
+      const displayText = cleanText.length > 400 ? cleanText.slice(0, 400) + '...' : cleanText;
+
+      // Author badge for RTs
+      const authorBadge = t.rt_author
+        ? `<span style="font-size:11px;color:rgba(255,255,255,0.35);font-weight:600;">@${escHtml(t.rt_author)}</span>`
+        : '';
 
       // Media thumbnails
       let mediaHtml = '';
@@ -1798,9 +1807,17 @@
         if (imgs) mediaHtml = `<div class="aff-tweet-media">${imgs}</div>`;
       }
 
+      // Link to original tweet if RT, otherwise to the OddsJam tweet
+      const viewUrl = t.original_tweet_id
+        ? `https://x.com/i/status/${t.original_tweet_id}`
+        : `https://x.com/OddsJam/status/${t.id}`;
+
       return `
         <div class="aff-tweet-card">
-          <div class="aff-tweet-cats">${cats}</div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+            <div class="aff-tweet-cats" style="margin-bottom:0;">${cats}</div>
+            ${authorBadge}
+          </div>
           <div class="aff-tweet-text">${escHtml(displayText)}</div>
           ${mediaHtml}
           <div class="aff-tweet-meta">
@@ -1812,7 +1829,7 @@
           </div>
           <div style="display:flex;gap:8px;align-items:center;">
             <button class="aff-qt-btn" onclick="openAffQtModal(${idx})">✍️ Quote Tweet</button>
-            <a href="https://x.com/OddsJam/status/${t.id}" target="_blank" rel="noopener" style="font-size:11px;color:rgba(255,255,255,0.3);text-decoration:none;">View on X ↗</a>
+            <a href="${viewUrl}" target="_blank" rel="noopener" style="font-size:11px;color:rgba(255,255,255,0.3);text-decoration:none;">View on X ↗</a>
           </div>
         </div>`;
     }).join('');

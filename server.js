@@ -1145,15 +1145,16 @@ app.get('/api/oddsjam-feed', async (req, res) => {
       console.log(`[affiliate] Resolved @OddsJam user ID: ${ojFeedCache.userId}`);
     }
 
-    // Step 2: Fetch recent tweets (max 100, last 24h, no RTs or replies)
+    // Step 2: Fetch recent tweets (max 100, last 24h, exclude replies only)
+    // We keep retweets because @OddsJam's affiliate content IS mostly RTs of affiliates
     const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const timelineRes = await twitterGet(`/users/${ojFeedCache.userId}/tweets`, {
       max_results: '100',
       start_time: since,
       'tweet.fields': 'created_at,public_metrics,referenced_tweets,entities,note_tweet,attachments',
-      'expansions': 'attachments.media_keys',
+      'expansions': 'attachments.media_keys,referenced_tweets.id',
       'media.fields': 'url,preview_image_url,type,width,height',
-      exclude: 'retweets,replies'
+      exclude: 'replies'
     });
     const timelineData = await timelineRes.json();
 
@@ -1175,14 +1176,38 @@ app.get('/api/oddsjam-feed', async (req, res) => {
       }
     }
 
+    // Build referenced tweet lookup (for resolving original RT tweet data)
+    const refTweetMap = {};
+    if (timelineData.includes?.tweets) {
+      for (const rt of timelineData.includes.tweets) {
+        refTweetMap[rt.id] = rt;
+      }
+    }
+
     const tweets = (timelineData.data || []).map(t => {
-      const metrics = t.public_metrics || {};
+      const isRetweet = t.referenced_tweets?.some(r => r.type === 'retweeted') || false;
+      const retweetRef = isRetweet ? t.referenced_tweets.find(r => r.type === 'retweeted') : null;
+      const originalTweet = retweetRef ? refTweetMap[retweetRef.id] : null;
+
+      // For RTs, use the original tweet's metrics (more useful) and resolve its media
+      const metrics = (isRetweet && originalTweet?.public_metrics) ? originalTweet.public_metrics : (t.public_metrics || {});
       const engagement = (metrics.like_count || 0) + (metrics.retweet_count || 0) * 2 + (metrics.reply_count || 0);
+
       // Use note_tweet.text for long tweets if available
       const fullText = t.note_tweet?.text || t.text || '';
-      // Resolve media attachments
-      const mediaKeys = t.attachments?.media_keys || [];
+
+      // Resolve media: for RTs, try original tweet's media first
+      const srcForMedia = (isRetweet && originalTweet) ? originalTweet : t;
+      const mediaKeys = srcForMedia.attachments?.media_keys || t.attachments?.media_keys || [];
       const media = mediaKeys.map(k => mediaMap[k]).filter(Boolean);
+
+      // Extract original author from RT text (e.g. "RT @username: ...")
+      let rtAuthor = null;
+      if (isRetweet) {
+        const authorMatch = fullText.match(/^RT @(\w+):/);
+        if (authorMatch) rtAuthor = authorMatch[1];
+      }
+
       return {
         id: t.id,
         text: fullText,
@@ -1190,6 +1215,9 @@ app.get('/api/oddsjam-feed', async (req, res) => {
         metrics,
         engagement,
         categories: classifyTweet({ ...t, text: fullText }),
+        is_retweet: isRetweet,
+        rt_author: rtAuthor,
+        original_tweet_id: retweetRef?.id || null,
         is_quote: t.referenced_tweets?.some(r => r.type === 'quoted') || false,
         referenced_tweets: t.referenced_tweets || [],
         urls: t.entities?.urls || [],
