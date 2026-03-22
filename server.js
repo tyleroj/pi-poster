@@ -62,6 +62,18 @@ if (!qCols.includes('tool_path'))     db.exec('ALTER TABLE queue ADD COLUMN tool
 if (!qCols.includes('is_quote_tweet')) db.exec('ALTER TABLE queue ADD COLUMN is_quote_tweet INTEGER DEFAULT 0');
 if (!qCols.includes('quote_tweet_id')) db.exec('ALTER TABLE queue ADD COLUMN quote_tweet_id TEXT');
 
+// QT log table — stores quote tweet text for building suggestion database
+db.exec(`
+  CREATE TABLE IF NOT EXISTS qt_log (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    original_tweet_id TEXT NOT NULL,
+    original_text  TEXT,
+    qt_text        TEXT NOT NULL,
+    category       TEXT,
+    created_at     INTEGER DEFAULT (unixepoch())
+  );
+`);
+
 // ── Middleware ────────────────────────────────────────────────────────────────
 app.use(express.static('public'));
 app.use(express.json());
@@ -129,6 +141,22 @@ async function twitterFetch(method, endpoint, body) {
       'Content-Type': 'application/json'
     },
     body: body ? JSON.stringify(body) : undefined
+  });
+  return res;
+}
+
+// Twitter API v2 GET helper — handles query params in OAuth 1.0a signature
+async function twitterGet(endpoint, queryParams = {}) {
+  const { token, secret } = getStoredTokens();
+  const baseUrl = `https://api.twitter.com/2${endpoint}`;
+  // Build full URL with query string
+  const qs = new URLSearchParams(queryParams).toString();
+  const fullUrl = qs ? `${baseUrl}?${qs}` : baseUrl;
+  // OAuth 1.0a: query params must be in signature base string — pass as data
+  const authHeader = oauth1Header('GET', baseUrl, token, secret, queryParams);
+  const res = await fetch(fullUrl, {
+    method: 'GET',
+    headers: { Authorization: authHeader }
   });
   return res;
 }
@@ -1053,6 +1081,143 @@ app.post('/post/qt-now', upload.fields([
     res.json({ success: true, ...result });
   } catch (err) {
     console.error('Post QT error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Affiliate QT: @OddsJam feed ─────────────────────────────────────────────
+// Cache to avoid hammering the Twitter API (refreshes at most every 5 min)
+let ojFeedCache = { data: null, ts: 0 };
+const OJ_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+// Classify a tweet into categories based on content
+function classifyTweet(tweet) {
+  const text = (tweet.text || '').toLowerCase();
+  const cats = [];
+
+  // Huge profit months — look for monthly/daily P&L, large dollar amounts with profit context
+  const dollarMatch = text.match(/\$[\d,]+(?:\.\d+)?/g);
+  const hasBigDollar = dollarMatch && dollarMatch.some(m => {
+    const val = parseFloat(m.replace(/[$,]/g, ''));
+    return val >= 1000;
+  });
+  const profitKeywords = /profit|p&l|p\/l|earned|made|won|up \$|banked|cashed|payout|return|roi|month|daily|week/;
+  if (hasBigDollar && profitKeywords.test(text)) cats.push('profit');
+
+  // Huge arbitrage bets — arb-specific language
+  const arbKeywords = /arbitrage|arb\b|arbing|risk.?free|guaranteed|sure.?bet|middle|free.?bet/;
+  if (arbKeywords.test(text)) cats.push('arbitrage');
+  // Also catch arb-adjacent: big dollar + no-risk language
+  if (hasBigDollar && /no.?risk|lock|free money|can.?t lose/i.test(text)) cats.push('arbitrage');
+
+  // Affiliate threads — thread indicators + promotional content
+  const isThread = /🧵|thread|1\/|part 1|\(1\)|step.by.step|how to|guide|tutorial|walkthrough|breakdown/i.test(text);
+  if (isThread) cats.push('thread');
+
+  // Affiliate content — promotional, tool mentions, sign-up language
+  const affiliateKeywords = /oddsjam|sign up|free trial|promo|discount|code |use code|link in bio|check out|subscribe|join|tool|software|platform|app\b/;
+  if (affiliateKeywords.test(text)) cats.push('affiliate');
+
+  // If nothing matched, mark as 'general'
+  if (!cats.length) cats.push('general');
+
+  return cats;
+}
+
+// Fetch @OddsJam timeline (last 24h) with engagement metrics
+app.get('/api/oddsjam-feed', async (req, res) => {
+  try {
+    const forceRefresh = req.query.force === '1';
+
+    // Return cache if fresh
+    if (!forceRefresh && ojFeedCache.data && (Date.now() - ojFeedCache.ts) < OJ_CACHE_TTL) {
+      return res.json(ojFeedCache.data);
+    }
+
+    // Step 1: Resolve @OddsJam user ID (cache it)
+    if (!ojFeedCache.userId) {
+      const userRes = await twitterGet('/users/by/username/OddsJam');
+      const userData = await userRes.json();
+      if (!userRes.ok || !userData.data?.id) {
+        throw new Error('Could not resolve @OddsJam user ID: ' + JSON.stringify(userData));
+      }
+      ojFeedCache.userId = userData.data.id;
+      console.log(`[affiliate] Resolved @OddsJam user ID: ${ojFeedCache.userId}`);
+    }
+
+    // Step 2: Fetch recent tweets (max 100, last 24h)
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const timelineRes = await twitterGet(`/users/${ojFeedCache.userId}/tweets`, {
+      max_results: '100',
+      start_time: since,
+      'tweet.fields': 'created_at,public_metrics,referenced_tweets,entities,note_tweet',
+      exclude: 'replies'
+    });
+    const timelineData = await timelineRes.json();
+
+    if (!timelineRes.ok) {
+      throw new Error('Timeline fetch failed: ' + JSON.stringify(timelineData));
+    }
+
+    const tweets = (timelineData.data || []).map(t => {
+      const metrics = t.public_metrics || {};
+      const engagement = (metrics.like_count || 0) + (metrics.retweet_count || 0) * 2 + (metrics.reply_count || 0);
+      // Use note_tweet.text for long tweets if available
+      const fullText = t.note_tweet?.text || t.text || '';
+      return {
+        id: t.id,
+        text: fullText,
+        created_at: t.created_at,
+        metrics,
+        engagement,
+        categories: classifyTweet({ ...t, text: fullText }),
+        is_retweet: t.referenced_tweets?.some(r => r.type === 'retweeted') || false,
+        is_quote: t.referenced_tweets?.some(r => r.type === 'quoted') || false,
+        referenced_tweets: t.referenced_tweets || [],
+        urls: t.entities?.urls || []
+      };
+    });
+
+    // Sort by engagement (highest first)
+    tweets.sort((a, b) => b.engagement - a.engagement);
+
+    const result = { tweets, fetched_at: Date.now(), count: tweets.length };
+    ojFeedCache.data = result;
+    ojFeedCache.ts = Date.now();
+    console.log(`[affiliate] Fetched ${tweets.length} tweets from @OddsJam (last 24h)`);
+
+    res.json(result);
+  } catch (err) {
+    console.error('[affiliate] Feed error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Log a QT for the suggestion database
+app.post('/api/qt-log', (req, res) => {
+  try {
+    const { original_tweet_id, original_text, qt_text, category } = req.body;
+    if (!qt_text || !original_tweet_id) return res.status(400).json({ error: 'qt_text and original_tweet_id required' });
+    db.prepare('INSERT INTO qt_log (original_tweet_id, original_text, qt_text, category) VALUES (?,?,?,?)')
+      .run(original_tweet_id, original_text || null, qt_text, category || null);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get past QT texts for suggestion pre-fills
+app.get('/api/qt-suggestions', (req, res) => {
+  try {
+    const category = req.query.category;
+    let rows;
+    if (category && category !== 'all') {
+      rows = db.prepare('SELECT qt_text, category, created_at FROM qt_log WHERE category = ? ORDER BY created_at DESC LIMIT 20').all(category);
+    } else {
+      rows = db.prepare('SELECT qt_text, category, created_at FROM qt_log ORDER BY created_at DESC LIMIT 20').all();
+    }
+    res.json(rows);
+  } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });

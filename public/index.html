@@ -675,6 +675,99 @@
       transition: border-color 0.15s, color 0.15s;
     }
     .modal-cancel:hover { border-color: rgba(255,255,255,0.18); color: #94a3b8; }
+
+    /* ── Affiliate QT ── */
+    .aff-filter {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.1);
+      color: rgba(255,255,255,0.6);
+      font-size: 12px;
+      font-weight: 600;
+      padding: 5px 12px;
+      border-radius: 20px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .aff-filter:hover { border-color: rgba(255,255,255,0.25); color: #e2e8f0; }
+    .aff-filter.active { background: rgba(29,155,240,0.15); border-color: rgba(29,155,240,0.4); color: #1d9bf0; }
+
+    .aff-tweet-card {
+      padding: 14px;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.06);
+      background: rgba(0,0,0,0.15);
+      margin-bottom: 10px;
+      transition: border-color 0.15s;
+    }
+    .aff-tweet-card:hover { border-color: rgba(255,255,255,0.15); }
+
+    .aff-tweet-text {
+      font-size: 13px;
+      color: rgba(255,255,255,0.75);
+      line-height: 1.55;
+      margin-bottom: 10px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .aff-tweet-meta {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      font-size: 11px;
+      color: rgba(255,255,255,0.3);
+      margin-bottom: 8px;
+    }
+
+    .aff-tweet-cats {
+      display: flex;
+      gap: 5px;
+      flex-wrap: wrap;
+      margin-bottom: 8px;
+    }
+
+    .aff-cat-badge {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+    .aff-cat-badge.profit { background: rgba(95,255,176,0.12); color: #5fffb0; }
+    .aff-cat-badge.arbitrage { background: rgba(168,85,247,0.12); color: #a855f7; }
+    .aff-cat-badge.thread { background: rgba(251,191,36,0.12); color: #fbbf24; }
+    .aff-cat-badge.affiliate { background: rgba(29,155,240,0.12); color: #1d9bf0; }
+    .aff-cat-badge.general { background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.4); }
+
+    .aff-qt-btn {
+      background: rgba(29,155,240,0.12);
+      border: 1px solid rgba(29,155,240,0.3);
+      color: #1d9bf0;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 5px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .aff-qt-btn:hover { background: rgba(29,155,240,0.25); border-color: rgba(29,155,240,0.5); }
+
+    .aff-suggestion-btn {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      color: rgba(255,255,255,0.5);
+      font-size: 11px;
+      padding: 6px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      text-align: left;
+      transition: all 0.15s;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .aff-suggestion-btn:hover { border-color: rgba(29,155,240,0.3); color: #1d9bf0; }
   </style>
 </head>
 <body>
@@ -729,7 +822,7 @@
 <div class="tab-nav glass">
   <button class="tab-btn active" id="tabBtnGenerate" onclick="switchTab('generate')">⚡ Generate</button>
   <button class="tab-btn" id="tabBtnWinners" onclick="switchTab('winners')">🏆 Winners</button>
-  <button class="tab-btn" id="tabBtnVideo" onclick="switchTab('video')">🎬 Video Test</button>
+  <button class="tab-btn" id="tabBtnAffiliate" onclick="switchTab('affiliate')">📡 Affiliate QT</button>
 </div>
 
 <!-- Generate tab -->
@@ -875,67 +968,78 @@
 </div>
 </div><!-- end tabWinners -->
 
-<!-- Video Test tab -->
-<div id="tabVideo" style="display:none;">
-<div class="glass" style="max-width:600px;width:100%;padding:28px 24px;">
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
-    <span style="font-size:18px;font-weight:700;color:#e2e8f0;">Video Upload Test</span>
-    <span style="font-size:11px;color:rgba(255,255,255,0.35);font-weight:500;">X API v2 Chunked Upload</span>
+<!-- Affiliate QT tab -->
+<div id="tabAffiliate" style="display:none;">
+<div class="glass" style="max-width:700px;width:100%;padding:28px 24px;">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+    <span style="font-size:18px;font-weight:700;color:#e2e8f0;">Affiliate QT</span>
+    <button class="refresh-btn" onclick="loadOjFeed(true)">↺ Refresh</button>
   </div>
 
-  <p style="font-size:13px;color:rgba(255,255,255,0.5);margin-bottom:18px;line-height:1.5;">
-    Test video uploading via the Twitter/X API v2 chunked media pipeline. Select a video file (MP4 recommended, max 512MB / 140s), optionally customize the tweet text, and hit upload. Each step will be logged in real time below.
+  <p style="font-size:13px;color:rgba(255,255,255,0.45);margin-bottom:16px;line-height:1.5;">
+    @OddsJam tweets from the past 24 hours. Filter by category, then QT and queue.
   </p>
 
-  <!-- Video file input -->
-  <div class="upload-zone" id="videoZone" onclick="document.getElementById('videoInput').click()" style="margin-bottom:16px;min-height:80px;">
-    <input type="file" id="videoInput" accept="video/mp4,video/quicktime,video/x-m4v,video/webm" hidden />
-    <div class="upload-placeholder" id="videoPlaceholder">
-      <div style="font-size:24px;">🎬</div>
-      <div>Drop or click to select video</div>
-      <div style="font-size:11px;color:rgba(255,255,255,0.3);margin-top:4px;">MP4, MOV, M4V, WebM — max 512MB</div>
+  <!-- Category filters -->
+  <div id="affFilterBar" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:18px;">
+    <button class="aff-filter active" data-cat="all" onclick="setAffFilter('all')">All</button>
+    <button class="aff-filter" data-cat="profit" onclick="setAffFilter('profit')">💰 Big Profits</button>
+    <button class="aff-filter" data-cat="arbitrage" onclick="setAffFilter('arbitrage')">🔒 Arbitrage</button>
+    <button class="aff-filter" data-cat="thread" onclick="setAffFilter('thread')">🧵 Threads</button>
+    <button class="aff-filter" data-cat="affiliate" onclick="setAffFilter('affiliate')">📢 Affiliate</button>
+    <button class="aff-filter" data-cat="top" onclick="setAffFilter('top')">🔥 Top Engagement</button>
+  </div>
+
+  <!-- Sort control -->
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;">
+    <span style="font-size:11px;color:rgba(255,255,255,0.35);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Sort:</span>
+    <select id="affSortSelect" onchange="renderAffFeed()" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:#e2e8f0;font-size:12px;padding:4px 8px;border-radius:6px;outline:none;">
+      <option value="engagement">Engagement (High → Low)</option>
+      <option value="recent">Most Recent</option>
+      <option value="oldest">Oldest First</option>
+    </select>
+  </div>
+
+  <!-- Feed -->
+  <div id="affFeedList"><div class="winners-empty">Click Refresh to load @OddsJam feed</div></div>
+</div>
+
+<!-- Affiliate QT Modal -->
+<div id="affQtModalBg" class="modal-bg" onclick="if(event.target===this)closeAffQtModal()">
+  <div class="modal glass" style="max-width:520px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <span style="font-size:15px;font-weight:700;">Quote Tweet</span>
+      <button onclick="closeAffQtModal()" style="background:none;border:none;color:rgba(255,255,255,0.5);font-size:18px;cursor:pointer;">✕</button>
     </div>
-    <div id="videoFileInfo" style="display:none;font-size:13px;color:#5fffb0;font-weight:600;"></div>
-  </div>
+    <div id="affQtOriginal" style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:12px;max-height:100px;overflow-y:auto;padding:10px;background:rgba(0,0,0,0.2);border-radius:8px;line-height:1.5;"></div>
+    <div id="affQtCategory" style="font-size:11px;color:rgba(255,255,255,0.3);margin-bottom:10px;"></div>
 
-  <!-- Tweet text -->
-  <textarea id="videoTweetText" class="tweet-textarea" rows="2" placeholder="Tweet text (optional — defaults to test message)" style="margin-bottom:16px;width:100%;"></textarea>
+    <!-- Past QT suggestions -->
+    <div id="affQtSuggestions" style="display:none;margin-bottom:10px;">
+      <div style="font-size:11px;color:rgba(255,255,255,0.35);font-weight:600;margin-bottom:6px;">PAST QTs (click to use):</div>
+      <div id="affQtSuggestionsList" style="display:flex;flex-direction:column;gap:4px;max-height:100px;overflow-y:auto;"></div>
+    </div>
 
-  <!-- Upload button -->
-  <button class="post-btn" id="videoUploadBtn" onclick="testVideoUpload()" style="width:100%;margin-bottom:20px;">
-    Upload & Tweet Video
-  </button>
-
-  <!-- Progress log -->
-  <div id="videoLog" style="display:none;">
-    <div style="font-size:12px;font-weight:700;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;">Upload Progress</div>
-    <div id="videoLogEntries" style="font-family:'SF Mono',Monaco,Consolas,monospace;font-size:12px;line-height:1.8;color:rgba(255,255,255,0.6);max-height:400px;overflow-y:auto;padding:12px;background:rgba(0,0,0,0.3);border-radius:8px;border:1px solid rgba(255,255,255,0.06);"></div>
-  </div>
-
-  <!-- Result -->
-  <div id="videoResult" style="display:none;margin-top:16px;padding:14px;border-radius:10px;border:1px solid rgba(95,255,176,0.3);background:rgba(95,255,176,0.05);">
-    <div style="font-size:13px;font-weight:700;color:#5fffb0;margin-bottom:6px;">Tweet Posted</div>
-    <a id="videoResultLink" href="#" target="_blank" rel="noopener" style="color:#1d9bf0;font-size:13px;text-decoration:none;font-weight:600;"></a>
-  </div>
-
-  <!-- Error -->
-  <div id="videoError" style="display:none;margin-top:16px;padding:14px;border-radius:10px;border:1px solid rgba(248,113,113,0.3);background:rgba(248,113,113,0.05);">
-    <div style="font-size:13px;font-weight:700;color:#f87171;margin-bottom:6px;">Upload Failed</div>
-    <div id="videoErrorMsg" style="font-size:12px;color:rgba(255,255,255,0.6);"></div>
+    <textarea id="affQtText" class="tweet-textarea" rows="3" placeholder="Write your quote tweet..." style="width:100%;margin-bottom:12px;"></textarea>
+    <div style="display:flex;gap:8px;">
+      <button class="post-btn" id="affQtQueueBtn" onclick="queueAffQT()" style="flex:1;">Add to Queue</button>
+      <button class="qt-post-btn" id="affQtPostBtn" onclick="postAffQTNow()" style="flex:1;">Post Now 𝕏</button>
+    </div>
   </div>
 </div>
-</div><!-- end tabVideo -->
+</div><!-- end tabAffiliate -->
 
 <script>
   // ── Tabs ──────────────────────────────────────────────────────────────────
   function switchTab(tab) {
     document.getElementById('tabGenerate').style.display = tab === 'generate' ? '' : 'none';
     document.getElementById('tabWinners').style.display  = tab === 'winners'  ? '' : 'none';
-    document.getElementById('tabVideo').style.display    = tab === 'video'    ? '' : 'none';
+    document.getElementById('tabAffiliate').style.display = tab === 'affiliate' ? '' : 'none';
     document.getElementById('tabBtnGenerate').classList.toggle('active', tab === 'generate');
     document.getElementById('tabBtnWinners').classList.toggle('active',  tab === 'winners');
-    document.getElementById('tabBtnVideo').classList.toggle('active',    tab === 'video');
+    document.getElementById('tabBtnAffiliate').classList.toggle('active', tab === 'affiliate');
     if (tab === 'winners') loadWinners();
+    if (tab === 'affiliate') loadOjFeed();
   }
 
   // ── Slip market data (extracted silently during generate) ────────────────────
@@ -1530,84 +1634,219 @@
     return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   }
 
-  // ── Video Test ─────────────────────────────────────────────────────────────
-  let videoFile = null;
+  // ── Affiliate QT ──────────────────────────────────────────────────────────────
+  let affFeedData = [];
+  let affFilter = 'all';
+  let affCurrentTweet = null;
 
-  document.getElementById('videoInput').addEventListener('change', () => {
-    const input = document.getElementById('videoInput');
-    const file = input.files[0];
-    if (!file) return;
-    videoFile = file;
-    const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
-    document.getElementById('videoPlaceholder').style.display = 'none';
-    const info = document.getElementById('videoFileInfo');
-    info.textContent = `${file.name} (${sizeMB} MB, ${file.type})`;
-    info.style.display = 'block';
-  });
+  function setAffFilter(cat) {
+    affFilter = cat;
+    document.querySelectorAll('.aff-filter').forEach(b => b.classList.toggle('active', b.dataset.cat === cat));
+    renderAffFeed();
+  }
 
-  async function testVideoUpload() {
-    const input = document.getElementById('videoInput');
-    const file = input.files[0];
-    if (!file) { showToast('Select a video file first', 'error'); return; }
-    if (!isConnected) { showToast('Connect your Twitter account first', 'error'); return; }
+  async function loadOjFeed(force) {
+    const el = document.getElementById('affFeedList');
+    el.innerHTML = '<div class="winners-empty"><span class="spinner"></span> Loading @OddsJam feed...</div>';
+    try {
+      const url = force ? '/api/oddsjam-feed?force=1' : '/api/oddsjam-feed';
+      const data = await fetch(url).then(r => r.json());
+      if (data.error) throw new Error(data.error);
+      affFeedData = data.tweets || [];
+      renderAffFeed();
+      if (force) showToast(`Loaded ${affFeedData.length} tweets`, 'success');
+    } catch (err) {
+      el.innerHTML = `<div class="winners-empty">Error: ${escHtml(err.message)}</div>`;
+    }
+  }
 
-    const btn     = document.getElementById('videoUploadBtn');
-    const logDiv  = document.getElementById('videoLog');
-    const entries = document.getElementById('videoLogEntries');
-    const result  = document.getElementById('videoResult');
-    const errDiv  = document.getElementById('videoError');
+  function renderAffFeed() {
+    const el = document.getElementById('affFeedList');
+    const sort = document.getElementById('affSortSelect').value;
 
-    btn.disabled = true;
-    btn.textContent = 'Uploading...';
-    logDiv.style.display = 'block';
-    result.style.display = 'none';
-    errDiv.style.display = 'none';
-    entries.innerHTML = '';
-
-    function addLog(step, detail, color) {
-      const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-      const c = color || (step === 'ERROR' ? '#f87171' : step === 'SUCCESS' ? '#5fffb0' : 'rgba(255,255,255,0.6)');
-      entries.innerHTML += `<div><span style="color:rgba(255,255,255,0.3)">${time}</span> <span style="color:${c};font-weight:700">[${step}]</span> ${escHtml(detail)}</div>`;
-      entries.scrollTop = entries.scrollHeight;
+    let filtered = affFeedData;
+    if (affFilter === 'top') {
+      // Top engagement: show top 20 by engagement regardless of category
+      filtered = [...affFeedData].sort((a, b) => b.engagement - a.engagement).slice(0, 20);
+    } else if (affFilter !== 'all') {
+      filtered = affFeedData.filter(t => t.categories.includes(affFilter));
     }
 
-    addLog('START', `Uploading ${file.name} (${(file.size / (1024*1024)).toFixed(1)}MB)...`);
+    // Apply sort
+    if (sort === 'engagement') {
+      filtered = [...filtered].sort((a, b) => b.engagement - a.engagement);
+    } else if (sort === 'recent') {
+      filtered = [...filtered].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    } else if (sort === 'oldest') {
+      filtered = [...filtered].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+    }
 
+    if (!filtered.length) {
+      el.innerHTML = `<div class="winners-empty">No tweets found for this filter. Try refreshing or changing the category.</div>`;
+      return;
+    }
+
+    const catColors = { profit: '💰', arbitrage: '🔒', thread: '🧵', affiliate: '📢', general: '' };
+    const catLabels = { profit: 'Profit', arbitrage: 'Arb', thread: 'Thread', affiliate: 'Affiliate', general: 'General' };
+
+    el.innerHTML = filtered.map((t, idx) => {
+      const time = new Date(t.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const date = new Date(t.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' });
+      const m = t.metrics;
+      const cats = t.categories.map(c =>
+        `<span class="aff-cat-badge ${c}">${catColors[c] || ''} ${catLabels[c] || c}</span>`
+      ).join('');
+
+      // Truncate long tweets for display
+      const displayText = t.text.length > 400 ? t.text.slice(0, 400) + '...' : t.text;
+
+      return `
+        <div class="aff-tweet-card">
+          <div class="aff-tweet-cats">${cats}</div>
+          <div class="aff-tweet-text">${escHtml(displayText)}</div>
+          <div class="aff-tweet-meta">
+            <span>${date} ${time}</span>
+            <span>❤️ ${m.like_count || 0}</span>
+            <span>🔁 ${m.retweet_count || 0}</span>
+            <span>💬 ${m.reply_count || 0}</span>
+            ${m.impression_count ? `<span>👁 ${m.impression_count.toLocaleString()}</span>` : ''}
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <button class="aff-qt-btn" onclick="openAffQtModal(${idx})">✍️ Quote Tweet</button>
+            <a href="https://x.com/OddsJam/status/${t.id}" target="_blank" rel="noopener" style="font-size:11px;color:rgba(255,255,255,0.3);text-decoration:none;">View on X ↗</a>
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  function openAffQtModal(idx) {
+    // Get the current filtered+sorted list to match the index
+    const sort = document.getElementById('affSortSelect').value;
+    let filtered = affFeedData;
+    if (affFilter === 'top') {
+      filtered = [...affFeedData].sort((a, b) => b.engagement - a.engagement).slice(0, 20);
+    } else if (affFilter !== 'all') {
+      filtered = affFeedData.filter(t => t.categories.includes(affFilter));
+    }
+    if (sort === 'engagement') filtered = [...filtered].sort((a, b) => b.engagement - a.engagement);
+    else if (sort === 'recent') filtered = [...filtered].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    else if (sort === 'oldest') filtered = [...filtered].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+
+    const tweet = filtered[idx];
+    if (!tweet) return;
+    affCurrentTweet = tweet;
+
+    document.getElementById('affQtOriginal').textContent = tweet.text;
+    document.getElementById('affQtCategory').textContent = 'Categories: ' + tweet.categories.join(', ');
+    document.getElementById('affQtText').value = '';
+    document.getElementById('affQtModalBg').classList.add('open');
+
+    // Load past QT suggestions
+    loadAffQtSuggestions(tweet.categories[0]);
+  }
+
+  function closeAffQtModal() {
+    document.getElementById('affQtModalBg').classList.remove('open');
+    affCurrentTweet = null;
+  }
+
+  async function loadAffQtSuggestions(category) {
+    const container = document.getElementById('affQtSuggestions');
+    const list = document.getElementById('affQtSuggestionsList');
     try {
-      const fd = new FormData();
-      fd.append('video', file);
-      const tweetText = document.getElementById('videoTweetText').value.trim();
-      if (tweetText) fd.append('text', tweetText);
-
-      addLog('UPLOAD', 'Sending to server (this may take a while for large files)...');
-
-      const resp = await fetch('/test/video-tweet', { method: 'POST', body: fd });
-      const data = await resp.json();
-
-      // Replay server-side steps into the log
-      if (data.steps) {
-        data.steps.forEach(s => addLog(s.step, s.detail, s.step === 'ERROR' ? '#f87171' : s.step === 'SUCCESS' ? '#5fffb0' : null));
-      }
-
-      if (data.success) {
-        result.style.display = 'block';
-        const link = document.getElementById('videoResultLink');
-        link.href = data.tweetUrl;
-        link.textContent = data.tweetUrl;
-        showToast('Video tweet posted!', 'success');
+      const rows = await fetch(`/api/qt-suggestions?category=${category || 'all'}`).then(r => r.json());
+      if (rows.length) {
+        list.innerHTML = rows.map(r =>
+          `<button class="aff-suggestion-btn" onclick="document.getElementById('affQtText').value=this.textContent">${escHtml(r.qt_text)}</button>`
+        ).join('');
+        container.style.display = 'block';
       } else {
-        errDiv.style.display = 'block';
-        document.getElementById('videoErrorMsg').textContent = data.error || 'Unknown error';
-        showToast('Video upload failed', 'error');
+        container.style.display = 'none';
       }
+    } catch {
+      container.style.display = 'none';
+    }
+  }
+
+  async function queueAffQT() {
+    if (!affCurrentTweet) return;
+    const qtText = document.getElementById('affQtText').value.trim();
+    if (!qtText) { showToast('Write your QT text first', 'error'); return; }
+    if (!isConnected) { showToast('Connect Twitter first', 'error'); return; }
+
+    const btn = document.getElementById('affQtQueueBtn');
+    btn.disabled = true; btn.textContent = 'Adding...';
+    try {
+      // Queue the QT
+      const data = await fetch('/queue/add-qt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tweet1: qtText,
+          quote_tweet_id: affCurrentTweet.id
+        })
+      }).then(r => r.json());
+      if (data.error) throw new Error(data.error);
+
+      // Log for suggestion database
+      fetch('/api/qt-log', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          original_tweet_id: affCurrentTweet.id,
+          original_text: affCurrentTweet.text,
+          qt_text: qtText,
+          category: affCurrentTweet.categories[0] || null
+        })
+      }).catch(() => {}); // fire-and-forget
+
+      showToast('QT added to queue', 'success');
+      closeAffQtModal();
+      loadQueue();
     } catch (err) {
-      addLog('ERROR', err.message, '#f87171');
-      errDiv.style.display = 'block';
-      document.getElementById('videoErrorMsg').textContent = err.message;
-      showToast('Video upload failed', 'error');
+      showToast(err.message, 'error');
     } finally {
-      btn.disabled = false;
-      btn.textContent = 'Upload & Tweet Video';
+      btn.disabled = false; btn.textContent = 'Add to Queue';
+    }
+  }
+
+  async function postAffQTNow() {
+    if (!affCurrentTweet) return;
+    const qtText = document.getElementById('affQtText').value.trim();
+    if (!qtText) { showToast('Write your QT text first', 'error'); return; }
+    if (!isConnected) { showToast('Connect Twitter first', 'error'); return; }
+
+    const btn = document.getElementById('affQtPostBtn');
+    btn.disabled = true; btn.textContent = 'Posting...';
+    try {
+      const data = await fetch('/post/qt-now', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tweet1: qtText,
+          quote_tweet_id: affCurrentTweet.id
+        })
+      }).then(r => r.json());
+      if (data.error) throw new Error(data.error);
+
+      // Log for suggestion database
+      fetch('/api/qt-log', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          original_tweet_id: affCurrentTweet.id,
+          original_text: affCurrentTweet.text,
+          qt_text: qtText,
+          category: affCurrentTweet.categories[0] || null
+        })
+      }).catch(() => {});
+
+      showToast('Quote tweet posted!', 'success');
+      closeAffQtModal();
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      btn.disabled = false; btn.textContent = 'Post Now 𝕏';
     }
   }
 
