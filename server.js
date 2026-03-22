@@ -221,7 +221,7 @@ async function uploadMedia(buffer, mimeType) {
 // ── Upload video media via X API v2 (chunked + processing poll) ──────────────
 // Returns mediaId once processing is complete and ready to attach to a tweet.
 // onProgress is an optional callback: (step, detail) => void
-const CHUNK_SIZE = 5 * 1024 * 1024; // 5 MB per chunk (Twitter recommendation)
+const CHUNK_SIZE = 3 * 1024 * 1024; // 3 MB per chunk (v2 append endpoint rejects >~4MB with 413)
 
 async function uploadVideoMedia(buffer, mimeType, onProgress) {
   const { token, secret } = getStoredTokens();
