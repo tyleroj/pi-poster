@@ -1145,13 +1145,15 @@ app.get('/api/oddsjam-feed', async (req, res) => {
       console.log(`[affiliate] Resolved @OddsJam user ID: ${ojFeedCache.userId}`);
     }
 
-    // Step 2: Fetch recent tweets (max 100, last 24h)
+    // Step 2: Fetch recent tweets (max 100, last 24h, no RTs or replies)
     const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const timelineRes = await twitterGet(`/users/${ojFeedCache.userId}/tweets`, {
       max_results: '100',
       start_time: since,
-      'tweet.fields': 'created_at,public_metrics,referenced_tweets,entities,note_tweet',
-      exclude: 'replies'
+      'tweet.fields': 'created_at,public_metrics,referenced_tweets,entities,note_tweet,attachments',
+      'expansions': 'attachments.media_keys',
+      'media.fields': 'url,preview_image_url,type,width,height',
+      exclude: 'retweets,replies'
     });
     const timelineData = await timelineRes.json();
 
@@ -1159,11 +1161,28 @@ app.get('/api/oddsjam-feed', async (req, res) => {
       throw new Error('Timeline fetch failed: ' + JSON.stringify(timelineData));
     }
 
+    // Build media lookup from includes
+    const mediaMap = {};
+    if (timelineData.includes?.media) {
+      for (const m of timelineData.includes.media) {
+        mediaMap[m.media_key] = {
+          type: m.type,
+          url: m.url || m.preview_image_url || null,
+          preview_url: m.preview_image_url || m.url || null,
+          width: m.width,
+          height: m.height
+        };
+      }
+    }
+
     const tweets = (timelineData.data || []).map(t => {
       const metrics = t.public_metrics || {};
       const engagement = (metrics.like_count || 0) + (metrics.retweet_count || 0) * 2 + (metrics.reply_count || 0);
       // Use note_tweet.text for long tweets if available
       const fullText = t.note_tweet?.text || t.text || '';
+      // Resolve media attachments
+      const mediaKeys = t.attachments?.media_keys || [];
+      const media = mediaKeys.map(k => mediaMap[k]).filter(Boolean);
       return {
         id: t.id,
         text: fullText,
@@ -1171,10 +1190,10 @@ app.get('/api/oddsjam-feed', async (req, res) => {
         metrics,
         engagement,
         categories: classifyTweet({ ...t, text: fullText }),
-        is_retweet: t.referenced_tweets?.some(r => r.type === 'retweeted') || false,
         is_quote: t.referenced_tweets?.some(r => r.type === 'quoted') || false,
         referenced_tweets: t.referenced_tweets || [],
-        urls: t.entities?.urls || []
+        urls: t.entities?.urls || [],
+        media
       };
     });
 
@@ -1273,13 +1292,81 @@ app.post('/queue/add', upload.fields([
   }
 });
 
+// ── Affiliate QT scheduling helper ───────────────────────────────────────────
+// Finds the next available slot in the preferred windows: 7-9 AM CT or 7-10 PM CT
+// Slots are ~1 hour apart. CT = UTC-6 (CST) or UTC-5 (CDT).
+function getNextAffiliateSlot() {
+  // Determine CT offset (CDT Mar-Nov = UTC-5, CST Nov-Mar = UTC-6)
+  // Simple DST check: 2nd Sunday of March to 1st Sunday of November
+  const now = new Date();
+  const year = now.getUTCFullYear();
+  const mar2nd = new Date(Date.UTC(year, 2, 8)); // March 8 at latest
+  const marchSunday = new Date(Date.UTC(year, 2, 8 + (7 - mar2nd.getUTCDay()) % 7, 7)); // 2nd Sunday March at 2AM CT
+  const nov1st = new Date(Date.UTC(year, 10, 1)); // Nov 1 at latest
+  const novSunday = new Date(Date.UTC(year, 10, 1 + (7 - nov1st.getUTCDay()) % 7, 7)); // 1st Sunday Nov at 2AM CT
+  const isDST = now >= marchSunday && now < novSunday;
+  const ctOffsetHours = isDST ? -5 : -6;
+
+  // Get current hour in CT
+  function toCT(date) {
+    return new Date(date.getTime() + ctOffsetHours * 60 * 60 * 1000);
+  }
+  function fromCT(ctDate) {
+    return new Date(ctDate.getTime() - ctOffsetHours * 60 * 60 * 1000);
+  }
+
+  // Get already-scheduled affiliate QTs (pending) to avoid overlap
+  const pendingSlots = db.prepare(`SELECT scheduled_at FROM queue WHERE status='pending' ORDER BY scheduled_at ASC`).all()
+    .map(r => r.scheduled_at);
+
+  // Build candidate slots starting from now, looking ahead up to 48 hours
+  const candidates = [];
+  const startCT = toCT(now);
+
+  for (let dayOffset = 0; dayOffset <= 2; dayOffset++) {
+    const dayCT = new Date(startCT);
+    dayCT.setUTCDate(dayCT.getUTCDate() + dayOffset);
+
+    // Morning window: 7:00 - 9:00 AM CT (slots at 7:00, 8:00)
+    for (let h = 7; h <= 8; h++) {
+      const slotCT = new Date(dayCT);
+      slotCT.setUTCHours(h, Math.floor(Math.random() * 30), 0, 0); // random 0-29 min offset
+      const slotUTC = fromCT(slotCT);
+      if (slotUTC.getTime() > now.getTime()) candidates.push(slotUTC.getTime());
+    }
+
+    // Evening window: 7:00 - 10:00 PM CT (slots at 19:00, 20:00, 21:00)
+    for (let h = 19; h <= 21; h++) {
+      const slotCT = new Date(dayCT);
+      slotCT.setUTCHours(h, Math.floor(Math.random() * 30), 0, 0);
+      const slotUTC = fromCT(slotCT);
+      if (slotUTC.getTime() > now.getTime()) candidates.push(slotUTC.getTime());
+    }
+  }
+
+  // Filter out slots that are too close to already-scheduled items (within 45 min)
+  const MIN_GAP = 45 * 60 * 1000;
+  const available = candidates.filter(slot => {
+    return !pendingSlots.some(existing => Math.abs(existing - slot) < MIN_GAP);
+  });
+
+  if (available.length === 0) {
+    // Fallback: just use 1 hour after last pending, or 1 hour from now
+    const latest = pendingSlots.length ? pendingSlots[pendingSlots.length - 1] : now.getTime();
+    return Math.max(latest, now.getTime()) + 60 * 60 * 1000;
+  }
+
+  // Return the earliest available slot
+  return available[0];
+}
+
 // Add a quote tweet to queue
 app.post('/queue/add-qt', upload.fields([
   { name: 'slip',     maxCount: 1 },
   { name: 'toolCard', maxCount: 1 }
 ]), async (req, res) => {
   try {
-    const { tweet1, quote_tweet_id, market_title, entry_price } = req.body;
+    const { tweet1, quote_tweet_id, market_title, entry_price, affiliate_schedule } = req.body;
     if (!tweet1 || !quote_tweet_id) return res.status(400).json({ error: 'Tweet text and quote_tweet_id required' });
 
     const slipFile  = req.files?.['slip']?.[0]     || null;
@@ -1290,11 +1377,17 @@ app.post('/queue/add-qt', upload.fields([
     if (slipFile) slipPath = saveImageToDisk(slipFile.buffer, slipFile.mimetype);
     if (toolFile) toolPath = saveImageToDisk(toolFile.buffer, toolFile.mimetype);
 
-    // Schedule 15-20 min after the latest pending item (or from now if queue empty)
-    const latest = db.prepare(`SELECT MAX(scheduled_at) as t FROM queue WHERE status='pending'`).get();
-    const base   = (latest?.t && latest.t > Date.now()) ? latest.t : Date.now();
-    const delay  = (15 + Math.floor(Math.random() * 6)) * 60 * 1000;
-    const scheduledAt = base + delay;
+    let scheduledAt;
+    if (affiliate_schedule) {
+      // Affiliate QT scheduling: 7-9 AM CT or 7-10 PM CT, ~1hr apart
+      scheduledAt = getNextAffiliateSlot();
+    } else {
+      // Default: 15-20 min after the latest pending item (or from now)
+      const latest = db.prepare(`SELECT MAX(scheduled_at) as t FROM queue WHERE status='pending'`).get();
+      const base   = (latest?.t && latest.t > Date.now()) ? latest.t : Date.now();
+      const delay  = (15 + Math.floor(Math.random() * 6)) * 60 * 1000;
+      scheduledAt = base + delay;
+    }
 
     const info = db.prepare('INSERT INTO queue (tweet1, tweet2, scheduled_at, market_title, entry_price, slip_path, tool_path, is_quote_tweet, quote_tweet_id) VALUES (?,?,?,?,?,?,?,?,?)')
       .run(tweet1, '', scheduledAt, market_title || null, entry_price ? parseInt(entry_price, 10) : null, slipPath, toolPath, 1, quote_tweet_id);

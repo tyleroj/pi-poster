@@ -768,6 +768,20 @@
       text-overflow: ellipsis;
     }
     .aff-suggestion-btn:hover { border-color: rgba(29,155,240,0.3); color: #1d9bf0; }
+
+    .aff-tweet-media {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 10px;
+      overflow-x: auto;
+    }
+    .aff-tweet-img {
+      max-height: 160px;
+      max-width: 280px;
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.08);
+      object-fit: cover;
+    }
   </style>
 </head>
 <body>
@@ -1700,10 +1714,20 @@
       // Truncate long tweets for display
       const displayText = t.text.length > 400 ? t.text.slice(0, 400) + '...' : t.text;
 
+      // Media thumbnails
+      let mediaHtml = '';
+      if (t.media && t.media.length) {
+        const imgs = t.media.filter(m => m.url || m.preview_url).map(m =>
+          `<img src="${escHtml(m.preview_url || m.url)}" alt="" class="aff-tweet-img" loading="lazy" />`
+        ).join('');
+        if (imgs) mediaHtml = `<div class="aff-tweet-media">${imgs}</div>`;
+      }
+
       return `
         <div class="aff-tweet-card">
           <div class="aff-tweet-cats">${cats}</div>
           <div class="aff-tweet-text">${escHtml(displayText)}</div>
+          ${mediaHtml}
           <div class="aff-tweet-meta">
             <span>${date} ${time}</span>
             <span>❤️ ${m.like_count || 0}</span>
@@ -1777,13 +1801,14 @@
     const btn = document.getElementById('affQtQueueBtn');
     btn.disabled = true; btn.textContent = 'Adding...';
     try {
-      // Queue the QT
+      // Queue the QT with affiliate scheduling (7-9AM / 7-10PM CT, ~1hr apart)
       const data = await fetch('/queue/add-qt', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           tweet1: qtText,
-          quote_tweet_id: affCurrentTweet.id
+          quote_tweet_id: affCurrentTweet.id,
+          affiliate_schedule: true
         })
       }).then(r => r.json());
       if (data.error) throw new Error(data.error);
@@ -1800,8 +1825,11 @@
         })
       }).catch(() => {}); // fire-and-forget
 
-      showToast('QT added to queue', 'success');
+      const schedTime = new Date(data.scheduledAt);
+      const timeStr = schedTime.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZoneName: 'short' });
+      showToast(`QT queued for ${timeStr}`, 'success');
       closeAffQtModal();
+      switchTab('generate');
       loadQueue();
     } catch (err) {
       showToast(err.message, 'error');
