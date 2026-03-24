@@ -1854,8 +1854,7 @@
 
     document.getElementById('affQtOriginal').textContent = tweet.text;
     const qtId = tweet.original_tweet_id || tweet.id;
-    document.getElementById('affQtCategory').textContent = `Categories: ${tweet.categories.join(', ')}  |  QT target: ${qtId}  |  is_retweet: ${tweet.is_retweet}  |  original_id: ${tweet.original_tweet_id || 'null'}`;
-    console.log('[AffQT] Tweet data:', JSON.stringify({ id: tweet.id, is_retweet: tweet.is_retweet, original_tweet_id: tweet.original_tweet_id, rt_author: tweet.rt_author, referenced_tweets: tweet.referenced_tweets }));
+    document.getElementById('affQtCategory').textContent = `Categories: ${tweet.categories.join(', ')}`;
     document.getElementById('affQtText').value = '';
     document.getElementById('affQtModalBg').classList.add('open');
 
