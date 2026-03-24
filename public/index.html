@@ -1899,7 +1899,7 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           tweet1: qtText,
-          quote_tweet_id: affCurrentTweet.id,
+          quote_tweet_id: affCurrentTweet.original_tweet_id || affCurrentTweet.id,
           affiliate_schedule: true
         })
       }).then(r => r.json());
@@ -1944,7 +1944,7 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           tweet1: qtText,
-          quote_tweet_id: affCurrentTweet.id
+          quote_tweet_id: affCurrentTweet.original_tweet_id || affCurrentTweet.id
         })
       }).then(r => r.json());
       if (data.error) throw new Error(data.error);
