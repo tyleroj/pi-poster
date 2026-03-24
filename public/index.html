@@ -909,6 +909,7 @@
   <button class="tab-btn active" id="tabBtnGenerate" onclick="switchTab('generate')">⚡ Generate</button>
   <button class="tab-btn" id="tabBtnWinners" onclick="switchTab('winners')">🏆 Winners</button>
   <button class="tab-btn" id="tabBtnAffiliate" onclick="switchTab('affiliate')">📡 Affiliate QT</button>
+  <button class="tab-btn" id="tabBtnAnalytics" onclick="switchTab('analytics')">📊 Analytics</button>
 </div>
 
 <!-- Generate tab -->
@@ -1108,7 +1109,16 @@
       <div id="affQtSuggestionsList" style="display:flex;flex-direction:column;gap:4px;max-height:100px;overflow-y:auto;"></div>
     </div>
 
-    <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;"><span style="position:relative;"><button class="emoji-btn" onclick="toggleEmojiPicker(event,'affQtText')">😀</button></span></div>
+    <!-- AI Suggestions -->
+    <div id="affAiSuggestions" style="display:none;margin-bottom:10px;">
+      <div style="font-size:11px;color:rgba(255,255,255,0.35);font-weight:600;margin-bottom:6px;">AI SUGGESTIONS (click to use):</div>
+      <div id="affAiSuggestionsList" style="display:flex;flex-direction:column;gap:4px;max-height:120px;overflow-y:auto;"></div>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+      <span style="position:relative;"><button class="emoji-btn" onclick="toggleEmojiPicker(event,'affQtText')">😀</button></span>
+      <button id="affAiSuggestBtn" onclick="generateAiQtSuggestions()" style="background:linear-gradient(135deg,#7c3aed,#6d28d9);border:none;color:#fff;padding:4px 12px;border-radius:6px;font-size:11px;cursor:pointer;font-weight:600;">AI Suggest</button>
+    </div>
     <textarea id="affQtText" class="tweet-textarea" rows="3" placeholder="Write your quote tweet..." style="width:100%;margin-bottom:12px;"></textarea>
     <div style="display:flex;gap:8px;">
       <button class="post-btn" id="affQtQueueBtn" onclick="queueAffQT()" style="flex:1;">Add to Queue</button>
@@ -1118,17 +1128,80 @@
 </div>
 </div><!-- end tabAffiliate -->
 
+<!-- Analytics Tab -->
+<div id="tabAnalytics" class="glass card" style="display:none;">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+    <h2 style="margin:0;font-size:18px;">Analytics</h2>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <select id="analyticsRange" onchange="loadAnalytics()" style="background:rgba(255,255,255,0.06);color:#fff;border:1px solid rgba(255,255,255,0.1);padding:6px 10px;border-radius:8px;font-size:12px;">
+        <option value="7">Last 7 days</option>
+        <option value="14">Last 14 days</option>
+        <option value="30" selected>Last 30 days</option>
+        <option value="90">Last 90 days</option>
+      </select>
+      <button onclick="loadAnalytics()" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.1);color:#fff;padding:6px 12px;border-radius:8px;font-size:12px;cursor:pointer;">Refresh</button>
+    </div>
+  </div>
+
+  <!-- Summary Cards -->
+  <div id="analyticsSummary" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:20px;">
+    <div class="glass" style="padding:14px;border-radius:10px;text-align:center;">
+      <div style="font-size:11px;color:rgba(255,255,255,0.4);font-weight:600;text-transform:uppercase;margin-bottom:4px;">Total Posts</div>
+      <div id="statTotalPosts" style="font-size:28px;font-weight:800;">—</div>
+    </div>
+    <div class="glass" style="padding:14px;border-radius:10px;text-align:center;">
+      <div style="font-size:11px;color:rgba(255,255,255,0.4);font-weight:600;text-transform:uppercase;margin-bottom:4px;">PI Tweets</div>
+      <div id="statPiTweets" style="font-size:28px;font-weight:800;color:#3b82f6;">—</div>
+    </div>
+    <div class="glass" style="padding:14px;border-radius:10px;text-align:center;">
+      <div style="font-size:11px;color:rgba(255,255,255,0.4);font-weight:600;text-transform:uppercase;margin-bottom:4px;">Affiliate QTs</div>
+      <div id="statAffQTs" style="font-size:28px;font-weight:800;color:#a855f7;">—</div>
+    </div>
+    <div class="glass" style="padding:14px;border-radius:10px;text-align:center;">
+      <div style="font-size:11px;color:rgba(255,255,255,0.4);font-weight:600;text-transform:uppercase;margin-bottom:4px;">Impressions</div>
+      <div id="statImpressions" style="font-size:28px;font-weight:800;color:#f59e0b;">—</div>
+    </div>
+    <div class="glass" style="padding:14px;border-radius:10px;text-align:center;">
+      <div style="font-size:11px;color:rgba(255,255,255,0.4);font-weight:600;text-transform:uppercase;margin-bottom:4px;">Likes</div>
+      <div id="statLikes" style="font-size:28px;font-weight:800;color:#ef4444;">—</div>
+    </div>
+    <div class="glass" style="padding:14px;border-radius:10px;text-align:center;">
+      <div style="font-size:11px;color:rgba(255,255,255,0.4);font-weight:600;text-transform:uppercase;margin-bottom:4px;">Retweets</div>
+      <div id="statRetweets" style="font-size:28px;font-weight:800;color:#22c55e;">—</div>
+    </div>
+  </div>
+
+  <!-- Daily Volume Chart (simple bar chart via CSS) -->
+  <div style="margin-bottom:20px;">
+    <div style="font-size:13px;font-weight:700;margin-bottom:10px;">Daily Post Volume</div>
+    <div id="analyticsDailyChart" style="display:flex;align-items:flex-end;gap:3px;height:120px;padding:8px;background:rgba(0,0,0,0.2);border-radius:10px;overflow-x:auto;"></div>
+    <div style="display:flex;gap:12px;margin-top:6px;font-size:10px;color:rgba(255,255,255,0.4);">
+      <span><span style="display:inline-block;width:10px;height:10px;background:#3b82f6;border-radius:2px;vertical-align:middle;margin-right:3px;"></span>PI Tweets</span>
+      <span><span style="display:inline-block;width:10px;height:10px;background:#a855f7;border-radius:2px;vertical-align:middle;margin-right:3px;"></span>Affiliate QTs</span>
+    </div>
+  </div>
+
+  <!-- Top Performers -->
+  <div>
+    <div style="font-size:13px;font-weight:700;margin-bottom:10px;">Top Performers</div>
+    <div id="analyticsTopPerformers" style="display:flex;flex-direction:column;gap:6px;"></div>
+  </div>
+</div>
+
 <script>
   // ── Tabs ──────────────────────────────────────────────────────────────────
   function switchTab(tab) {
     document.getElementById('tabGenerate').style.display = tab === 'generate' ? '' : 'none';
     document.getElementById('tabWinners').style.display  = tab === 'winners'  ? '' : 'none';
     document.getElementById('tabAffiliate').style.display = tab === 'affiliate' ? '' : 'none';
+    document.getElementById('tabAnalytics').style.display = tab === 'analytics' ? '' : 'none';
     document.getElementById('tabBtnGenerate').classList.toggle('active', tab === 'generate');
     document.getElementById('tabBtnWinners').classList.toggle('active',  tab === 'winners');
     document.getElementById('tabBtnAffiliate').classList.toggle('active', tab === 'affiliate');
+    document.getElementById('tabBtnAnalytics').classList.toggle('active', tab === 'analytics');
     if (tab === 'winners') loadWinners();
     if (tab === 'affiliate') loadOjFeed();
+    if (tab === 'analytics') loadAnalytics();
   }
 
   // ── Slip market data (extracted silently during generate) ────────────────────
@@ -1856,6 +1929,8 @@
     const qtId = tweet.original_tweet_id || tweet.id;
     document.getElementById('affQtCategory').textContent = `Categories: ${tweet.categories.join(', ')}`;
     document.getElementById('affQtText').value = '';
+    document.getElementById('affAiSuggestions').style.display = 'none';
+    document.getElementById('affAiSuggestionsList').innerHTML = '';
     document.getElementById('affQtModalBg').classList.add('open');
 
     // Load past QT suggestions
@@ -2061,6 +2136,117 @@
       activeEmojiTarget = null;
     }
   });
+
+  // ── AI QT Suggestions ────────────────────────────────────────────────────
+  async function generateAiQtSuggestions() {
+    if (!affCurrentTweet) return;
+    const btn = document.getElementById('affAiSuggestBtn');
+    const container = document.getElementById('affAiSuggestions');
+    const list = document.getElementById('affAiSuggestionsList');
+
+    btn.disabled = true;
+    btn.textContent = 'Thinking...';
+    btn.style.opacity = '0.6';
+
+    try {
+      const res = await fetch('/api/qt-suggest-ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          original_text: affCurrentTweet.text,
+          category: affCurrentTweet.categories[0] || 'general',
+          rt_author: affCurrentTweet.rt_author
+        })
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+
+      if (data.suggestions && data.suggestions.length) {
+        list.innerHTML = data.suggestions.map(s =>
+          `<button class="aff-suggestion-btn" onclick="document.getElementById('affQtText').value=this.textContent" style="text-align:left;padding:8px 10px;background:rgba(124,58,237,0.12);border:1px solid rgba(124,58,237,0.25);border-radius:6px;color:rgba(255,255,255,0.8);font-size:12px;cursor:pointer;line-height:1.4;">${escHtml(s)}</button>`
+        ).join('');
+        container.style.display = 'block';
+      }
+    } catch (err) {
+      showToast('AI suggest failed: ' + err.message, 'error');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'AI Suggest';
+      btn.style.opacity = '1';
+    }
+  }
+
+  // ── Analytics ───────────────────────────────────────────────────────────────
+  function fmtNum(n) {
+    if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+    if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
+    return n.toString();
+  }
+
+  async function loadAnalytics() {
+    const days = document.getElementById('analyticsRange').value;
+    try {
+      const data = await fetch(`/api/analytics?days=${days}`).then(r => r.json());
+      if (data.error) throw new Error(data.error);
+
+      const s = data.summary;
+      document.getElementById('statTotalPosts').textContent = s.total_posts;
+      document.getElementById('statPiTweets').textContent = s.pi_tweets;
+      document.getElementById('statAffQTs').textContent = s.affiliate_qts;
+      document.getElementById('statImpressions').textContent = fmtNum(s.total_impressions);
+      document.getElementById('statLikes').textContent = fmtNum(s.total_likes);
+      document.getElementById('statRetweets').textContent = fmtNum(s.total_retweets);
+
+      // Daily chart
+      const chartEl = document.getElementById('analyticsDailyChart');
+      if (data.daily.length === 0) {
+        chartEl.innerHTML = '<div style="width:100%;text-align:center;color:rgba(255,255,255,0.3);font-size:12px;align-self:center;">No posts in this period</div>';
+      } else {
+        const maxVal = Math.max(...data.daily.map(d => d.total), 1);
+        chartEl.innerHTML = data.daily.map(d => {
+          const piH = Math.max((d.pi / maxVal) * 100, d.pi > 0 ? 4 : 0);
+          const affH = Math.max((d.affiliate / maxVal) * 100, d.affiliate > 0 ? 4 : 0);
+          const dateLabel = new Date(d.date + 'T12:00:00').toLocaleDateString([], { month: 'short', day: 'numeric' });
+          return `<div style="flex:1;min-width:20px;max-width:40px;display:flex;flex-direction:column;align-items:center;gap:1px;" title="${dateLabel}: ${d.pi} PI, ${d.affiliate} Aff">
+            <div style="width:100%;display:flex;flex-direction:column;gap:1px;">
+              <div style="width:100%;height:${affH}px;background:#a855f7;border-radius:2px 2px 0 0;"></div>
+              <div style="width:100%;height:${piH}px;background:#3b82f6;border-radius:0 0 2px 2px;"></div>
+            </div>
+            <div style="font-size:8px;color:rgba(255,255,255,0.3);transform:rotate(-45deg);white-space:nowrap;margin-top:4px;">${dateLabel}</div>
+          </div>`;
+        }).join('');
+      }
+
+      // Top performers
+      const topEl = document.getElementById('analyticsTopPerformers');
+      if (data.top_performers.length === 0) {
+        topEl.innerHTML = '<div style="color:rgba(255,255,255,0.3);font-size:12px;">No posted tweets with metrics yet</div>';
+      } else {
+        topEl.innerHTML = data.top_performers.map((t, i) => {
+          const typeColor = t.type === 'affiliate_qt' ? '#a855f7' : '#3b82f6';
+          const typeLabel = t.type === 'affiliate_qt' ? 'QT' : 'PI';
+          const date = new Date(t.posted_at).toLocaleDateString([], { month: 'short', day: 'numeric' });
+          const tweetUrl = t.tweet1_id ? `https://x.com/i/status/${t.tweet1_id}` : '#';
+          return `<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:rgba(0,0,0,0.2);border-radius:8px;">
+            <span style="font-size:14px;font-weight:800;color:rgba(255,255,255,0.2);min-width:20px;">${i + 1}</span>
+            <span style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;background:${typeColor}22;color:${typeColor};text-transform:uppercase;">${typeLabel}</span>
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:12px;color:rgba(255,255,255,0.7);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escHtml(t.text)}</div>
+              <div style="font-size:10px;color:rgba(255,255,255,0.3);margin-top:2px;">${date}${t.market_title ? ' · ' + escHtml(t.market_title) : ''}</div>
+            </div>
+            <div style="display:flex;gap:8px;font-size:10px;color:rgba(255,255,255,0.4);white-space:nowrap;">
+              <span title="Impressions">👁 ${fmtNum(t.impressions)}</span>
+              <span title="Likes">❤ ${fmtNum(t.likes)}</span>
+              <span title="Retweets">🔁 ${fmtNum(t.retweets)}</span>
+            </div>
+            <a href="${tweetUrl}" target="_blank" rel="noopener" style="font-size:10px;color:rgba(255,255,255,0.2);text-decoration:none;">↗</a>
+          </div>`;
+        }).join('');
+      }
+    } catch (err) {
+      showToast('Analytics load failed: ' + err.message, 'error');
+    }
+  }
 
   // ── Init ───────────────────────────────────────────────────────────────────
   const params = new URLSearchParams(window.location.search);

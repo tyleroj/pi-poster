@@ -1273,6 +1273,179 @@ app.get('/api/qt-suggestions', (req, res) => {
   }
 });
 
+// AI-powered QT suggestion — uses past QTs + original tweet to draft text
+app.post('/api/qt-suggest-ai', async (req, res) => {
+  try {
+    const { original_text, category, rt_author } = req.body;
+    if (!original_text) return res.status(400).json({ error: 'original_text required' });
+
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) return res.status(500).json({ error: 'ANTHROPIC_API_KEY not set' });
+
+    // Fetch recent QTs from the log to learn the user's style
+    const pastQTs = db.prepare(
+      'SELECT original_text, qt_text, category FROM qt_log ORDER BY created_at DESC LIMIT 30'
+    ).all();
+
+    let styleExamples = '';
+    if (pastQTs.length > 0) {
+      styleExamples = '\n\nHere are examples of quote tweets I\'ve written before (learn my tone, style, and patterns):\n' +
+        pastQTs.map((q, i) => `${i + 1}. Original: "${q.original_text || 'N/A'}"\n   My QT: "${q.qt_text}"`).join('\n');
+    }
+
+    const client = new Anthropic({ apiKey });
+    const msg = await client.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 600,
+      temperature: 1,
+      messages: [{
+        role: 'user',
+        content: `You are helping me write a quote tweet for a sports betting affiliate post.
+
+Original tweet (from @${rt_author || 'OddsJam'}):
+"${original_text}"
+
+Category: ${category || 'general'}
+${styleExamples}
+
+Write 3 different quote tweet options. Each should:
+- Be under 240 characters
+- Feel natural, not salesy or corny
+- Reference OddsJam or the tool naturally if it fits
+- Match my past writing style if examples were provided
+- NEVER use em dashes (—)
+- No generic hype like "Let's go!" or "This is huge!"
+- Be conversational and authentic
+
+Return ONLY 3 options, one per line, numbered 1-3. Nothing else.`
+      }]
+    });
+
+    const text = msg.content[0].text.trim();
+    const suggestions = text.split('\n')
+      .map(l => l.replace(/^\d+[\.\)]\s*/, '').trim())
+      .filter(l => l.length > 0 && l.length <= 280);
+
+    res.json({ suggestions });
+  } catch (err) {
+    console.error('[ai-suggest] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Analytics — post volume, engagement, and metrics over time
+app.get('/api/analytics', async (req, res) => {
+  try {
+    const range = parseInt(req.query.days) || 30;
+    const sinceTs = Math.floor(Date.now() / 1000) - (range * 86400);
+
+    // All posted items in range
+    const posted = db.prepare(
+      `SELECT id, tweet1, tweet2, posted_at, tweet1_id, tweet2_id, is_quote_tweet, quote_tweet_id, market_title, created_at
+       FROM queue WHERE status='posted' AND posted_at > ? ORDER BY posted_at DESC`
+    ).all(sinceTs * 1000); // posted_at is in milliseconds
+
+    // Split into PI tweets vs Affiliate QTs
+    const piTweets = posted.filter(p => !p.is_quote_tweet);
+    const affQTs = posted.filter(p => p.is_quote_tweet);
+
+    // QT log stats
+    const qtLogCount = db.prepare(
+      'SELECT COUNT(*) as cnt FROM qt_log WHERE created_at > ?'
+    ).get(sinceTs).cnt;
+
+    // Daily breakdown
+    const dailyMap = {};
+    for (const p of posted) {
+      const day = new Date(p.posted_at).toISOString().slice(0, 10);
+      if (!dailyMap[day]) dailyMap[day] = { date: day, pi: 0, affiliate: 0, total: 0 };
+      if (p.is_quote_tweet) dailyMap[day].affiliate++;
+      else dailyMap[day].pi++;
+      dailyMap[day].total++;
+    }
+    const daily = Object.values(dailyMap).sort((a, b) => a.date.localeCompare(b.date));
+
+    // Try to fetch engagement metrics from Twitter for recent tweets
+    let tweetMetrics = [];
+    const tweetIds = posted
+      .map(p => p.tweet1_id)
+      .filter(Boolean)
+      .slice(0, 100); // API limit
+
+    if (tweetIds.length > 0) {
+      try {
+        const batchSize = 100;
+        for (let i = 0; i < tweetIds.length; i += batchSize) {
+          const batch = tweetIds.slice(i, i + batchSize);
+          const metricsRes = await twitterGet('/tweets', {
+            ids: batch.join(','),
+            'tweet.fields': 'public_metrics,created_at'
+          });
+          const metricsData = await metricsRes.json();
+          if (metricsData.data) {
+            tweetMetrics.push(...metricsData.data);
+          }
+        }
+      } catch (e) {
+        console.error('[analytics] Metrics fetch error:', e.message);
+      }
+    }
+
+    // Aggregate metrics
+    let totalImpressions = 0, totalLikes = 0, totalRetweets = 0, totalReplies = 0;
+    const metricsById = {};
+    for (const t of tweetMetrics) {
+      const m = t.public_metrics || {};
+      totalImpressions += m.impression_count || 0;
+      totalLikes += m.like_count || 0;
+      totalRetweets += m.retweet_count || 0;
+      totalReplies += m.reply_count || 0;
+      metricsById[t.id] = m;
+    }
+
+    // Build per-tweet detail list with metrics
+    const tweetDetails = posted.map(p => {
+      const m = metricsById[p.tweet1_id] || {};
+      return {
+        id: p.id,
+        tweet1_id: p.tweet1_id,
+        text: p.tweet1.substring(0, 100) + (p.tweet1.length > 100 ? '...' : ''),
+        type: p.is_quote_tweet ? 'affiliate_qt' : 'pi_tweet',
+        posted_at: p.posted_at,
+        market_title: p.market_title,
+        impressions: m.impression_count || 0,
+        likes: m.like_count || 0,
+        retweets: m.retweet_count || 0,
+        replies: m.reply_count || 0,
+        engagement: (m.like_count || 0) + (m.retweet_count || 0) * 2 + (m.reply_count || 0)
+      };
+    });
+
+    // Sort by engagement for "top performers"
+    const topPerformers = [...tweetDetails].sort((a, b) => b.engagement - a.engagement).slice(0, 10);
+
+    res.json({
+      range_days: range,
+      summary: {
+        total_posts: posted.length,
+        pi_tweets: piTweets.length,
+        affiliate_qts: affQTs.length,
+        qt_texts_logged: qtLogCount,
+        total_impressions: totalImpressions,
+        total_likes: totalLikes,
+        total_retweets: totalRetweets,
+        total_replies: totalReplies
+      },
+      daily,
+      top_performers: topPerformers,
+      tweets: tweetDetails
+    });
+  } catch (err) {
+    console.error('[analytics] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Serve stored images ───────────────────────────────────────────────────────
 app.get('/api/images/:filename', (req, res) => {
   try {
