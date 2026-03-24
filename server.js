@@ -431,12 +431,38 @@ async function postQuoteTweet(tweetText, quoteOfId, slipFile, toolFile) {
     }
   }
 
+  // First try the official quote_tweet_id parameter
   tweetBody.quote_tweet_id = quoteOfId;
+  console.log('[QT] Attempting quote tweet with quote_tweet_id:', quoteOfId);
   const r = await twitterFetch('POST', '/tweets', tweetBody);
   const d = await r.json();
-  if (!r.ok) throw new Error(d.detail || d.title || JSON.stringify(d));
 
-  return { tweet1Id: d.data.id, mediaErrors };
+  if (r.ok) {
+    console.log('[QT] Success with quote_tweet_id');
+    return { tweet1Id: d.data.id, mediaErrors };
+  }
+
+  // Check if it's the "quoting not allowed" restriction error
+  const errMsg = d.detail || d.title || JSON.stringify(d);
+  console.log('[QT] quote_tweet_id failed:', errMsg);
+
+  if (errMsg.toLowerCase().includes('quoting') || errMsg.toLowerCase().includes('not allowed')) {
+    // Fallback: append the tweet URL to the text instead
+    // Twitter auto-renders URLs to tweets as quote tweets
+    const tweetUrl = `https://x.com/i/status/${quoteOfId}`;
+    delete tweetBody.quote_tweet_id;
+    tweetBody.text = `${tweetText}\n${tweetUrl}`;
+    console.log('[QT] Retrying with URL fallback:', tweetUrl);
+
+    const r2 = await twitterFetch('POST', '/tweets', tweetBody);
+    const d2 = await r2.json();
+    if (!r2.ok) throw new Error(d2.detail || d2.title || JSON.stringify(d2));
+
+    console.log('[QT] Success with URL fallback');
+    return { tweet1Id: d2.data.id, mediaErrors, method: 'url_fallback' };
+  }
+
+  throw new Error(errMsg);
 }
 
 // ── OAuth 1.0a 3-legged auth routes ──────────────────────────────────────────
