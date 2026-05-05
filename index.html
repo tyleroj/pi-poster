@@ -1,0 +1,2557 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PI Poster</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #060810;
+      background-image:
+        radial-gradient(ellipse 80% 50% at 20% -10%, rgba(95,255,176,0.07) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 40% at 80% 100%, rgba(29,155,240,0.06) 0%, transparent 60%);
+      color: #e2e8f0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 32px 16px 80px;
+    }
+
+    /* ── Toast ── */
+    .toast {
+      position: fixed; bottom: 28px; left: 50%;
+      transform: translateX(-50%) translateY(80px);
+      background: rgba(22,26,36,0.95);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 10px; color: #e2e8f0;
+      font-size: 13px; font-weight: 600; padding: 10px 20px;
+      z-index: 999; opacity: 0; transition: opacity 0.2s, transform 0.25s;
+      pointer-events: none; white-space: nowrap;
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    .toast.success { border-color: rgba(95,255,176,0.4); color: #5fffb0; }
+    .toast.error   { border-color: rgba(248,113,113,0.4); color: #f87171; }
+
+    /* ── Glass card ── */
+    .glass {
+      background: rgba(255,255,255,0.035);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 20px;
+    }
+    .glass-inner {
+      background: rgba(255,255,255,0.025);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 12px;
+    }
+
+    /* ── Header ── */
+    .header {
+      width: 100%; max-width: 640px;
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 24px; padding: 14px 20px;
+    }
+    .logo { display: flex; align-items: center; gap: 10px; }
+    .logo-mark {
+      width: 32px; height: 32px; border-radius: 9px;
+      background: linear-gradient(135deg, #5fffb0 0%, #1d9bf0 100%);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 15px; font-weight: 900; color: #060810;
+    }
+    h1 { font-size: 18px; font-weight: 700; color: #fff; letter-spacing: -0.3px; }
+
+    .connect-btn {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 9px; color: #94a3b8;
+      font-size: 13px; font-weight: 600;
+      padding: 8px 16px; cursor: pointer;
+      transition: all 0.15s; text-decoration: none;
+      display: inline-flex; align-items: center; gap: 7px;
+    }
+    .connect-btn:hover { border-color: rgba(95,255,176,0.5); color: #5fffb0; background: rgba(95,255,176,0.06); }
+    .connect-btn.connected { border-color: rgba(95,255,176,0.4); color: #5fffb0; background: rgba(95,255,176,0.08); }
+    .connect-btn.disconnect { border-color: rgba(239,68,68,0.4); color: #f87171; background: rgba(239,68,68,0.06); }
+    .connect-btn.disconnect:hover { background: rgba(239,68,68,0.12); }
+
+    /* ── Main card ── */
+    .main-card {
+      width: 100%; max-width: 640px;
+      padding: 24px; margin-bottom: 16px;
+    }
+
+    .section-title {
+      font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 1px; color: #475569; margin-bottom: 14px;
+    }
+
+    /* ── Upload grid ── */
+    .upload-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+
+    .upload-label {
+      font-size: 11px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.8px; color: #64748b;
+      margin-bottom: 7px; display: flex; align-items: center; gap: 6px;
+    }
+    .badge {
+      font-size: 9px; background: rgba(255,255,255,0.06);
+      color: #475569; border-radius: 4px; padding: 2px 6px;
+      text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .req { color: #f87171; font-size: 13px; }
+
+    .upload-zone {
+      border: 1.5px dashed rgba(255,255,255,0.1);
+      border-radius: 12px; cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      position: relative; overflow: hidden;
+      background: rgba(255,255,255,0.02);
+      min-height: 100px;
+    }
+    .upload-zone:hover { border-color: rgba(95,255,176,0.4); background: rgba(95,255,176,0.03); }
+    .upload-zone.has-file { border-color: rgba(95,255,176,0.35); border-style: solid; background: rgba(95,255,176,0.04); }
+    .upload-zone input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; z-index: 2; width: 100%; height: 100%; }
+
+    .upload-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 22px 12px; gap: 5px; }
+    .upload-icon { font-size: 24px; }
+    .upload-title { font-size: 12px; font-weight: 600; color: #94a3b8; text-align: center; }
+    .upload-hint { font-size: 11px; color: #334155; text-align: center; }
+
+    .upload-preview { display: none; width: 100%; position: relative; padding: 6px; }
+    .upload-preview img { width: 100%; height: auto; max-height: 240px; object-fit: contain; display: block; border-radius: 8px; }
+    .upload-zone.has-file .upload-empty { display: none; }
+    .upload-zone.has-file .upload-preview { display: block; }
+    .preview-actions { position: absolute; bottom: 10px; right: 10px; display: flex; gap: 5px; z-index: 3; }
+    .preview-btn {
+      background: rgba(6,8,16,0.85); backdrop-filter: blur(8px);
+      border: 1px solid rgba(255,255,255,0.12);
+      color: #94a3b8; font-size: 10px; font-weight: 600;
+      padding: 3px 9px; border-radius: 5px; cursor: pointer;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .preview-btn:hover { color: #5fffb0; border-color: rgba(95,255,176,0.5); }
+
+    /* ── Divider ── */
+    .divider { height: 1px; background: rgba(255,255,255,0.06); margin: 20px 0; }
+
+    /* ── Style pills ── */
+    .style-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 18px; }
+    .style-btn {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 8px; color: #64748b;
+      font-size: 12px; font-weight: 600; padding: 5px 13px;
+      cursor: pointer; transition: all 0.15s;
+    }
+    .style-btn:hover { border-color: rgba(95,255,176,0.4); color: #5fffb0; }
+    .style-btn.active { background: rgba(95,255,176,0.1); border-color: rgba(95,255,176,0.45); color: #5fffb0; }
+
+    /* ── Text input ── */
+    .text-input {
+      width: 100%; background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 10px; color: #e2e8f0; font-size: 13px;
+      padding: 10px 14px; outline: none;
+      transition: border-color 0.2s; margin-bottom: 18px;
+      font-family: inherit;
+    }
+    .text-input:focus { border-color: rgba(95,255,176,0.45); background: rgba(95,255,176,0.04); }
+    .text-input::placeholder { color: #1e293b; }
+
+    /* ── Generate button ── */
+    .generate-btn {
+      width: 100%;
+      background: linear-gradient(135deg, #5fffb0 0%, #3dd68c 100%);
+      color: #060810; border: none; border-radius: 12px;
+      padding: 13px; font-size: 15px; font-weight: 700;
+      cursor: pointer; transition: opacity 0.2s, transform 0.1s;
+      letter-spacing: -0.2px; box-shadow: 0 4px 24px rgba(95,255,176,0.2);
+    }
+    .generate-btn:hover { opacity: 0.92; transform: translateY(-1px); }
+    .generate-btn:active { transform: translateY(0); }
+    .generate-btn:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
+
+    /* ── Loading ── */
+    .loading { display: none; text-align: center; padding: 20px 0; color: #64748b; font-size: 14px; }
+    .spinner {
+      display: inline-block; width: 16px; height: 16px;
+      border: 2px solid rgba(255,255,255,0.08); border-top-color: #5fffb0;
+      border-radius: 50%; animation: spin 0.75s linear infinite;
+      margin-right: 8px; vertical-align: middle;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Error ── */
+    .error-msg {
+      background: rgba(239,68,68,0.07);
+      border: 1px solid rgba(239,68,68,0.25);
+      border-radius: 12px; color: #f87171; font-size: 13px;
+      padding: 12px 16px; display: none; margin-top: 12px;
+      max-width: 640px; width: 100%;
+    }
+
+    /* ── Tweet section ── */
+    .tweet-section { display: none; }
+    .tweet-section-card {
+      width: 100%; max-width: 640px;
+      margin-bottom: 16px; padding: 0; overflow: hidden;
+    }
+
+    /* Twitter-like thread compose */
+    .thread-header {
+      padding: 18px 22px 14px;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    .thread-header-title {
+      font-size: 16px; font-weight: 700; color: #fff; letter-spacing: -0.2px;
+    }
+
+    .tweet-compose {
+      padding: 18px 22px;
+      display: flex;
+      gap: 14px;
+    }
+    .tweet-compose + .tweet-compose {
+      border-top: 1px solid rgba(255,255,255,0.05);
+    }
+
+    /* Left column: avatar + thread line */
+    .tweet-left {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      flex-shrink: 0;
+    }
+    .tweet-avatar {
+      width: 38px; height: 38px; border-radius: 50%;
+      background: linear-gradient(135deg, #5fffb0 0%, #1d9bf0 100%);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px; font-weight: 900; color: #060810;
+      flex-shrink: 0;
+    }
+    .thread-line {
+      width: 2px; flex: 1; margin-top: 6px;
+      background: rgba(255,255,255,0.1);
+      border-radius: 1px; min-height: 20px;
+    }
+
+    /* Right column: content */
+    .tweet-right { flex: 1; min-width: 0; }
+
+    .tweet-meta {
+      display: flex; align-items: center; gap: 8px;
+      margin-bottom: 8px;
+    }
+    .tweet-handle {
+      font-size: 14px; font-weight: 700; color: #fff;
+    }
+    .tweet-num {
+      font-size: 11px; font-weight: 600; color: #475569;
+      text-transform: uppercase; letter-spacing: 0.6px;
+    }
+    .bold-btn {
+      margin-left: auto;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.09);
+      border-radius: 6px; color: #64748b;
+      font-size: 12px; font-weight: 800;
+      padding: 2px 9px; cursor: pointer;
+      transition: all 0.15s; line-height: 1.6;
+      font-family: inherit; letter-spacing: -0.3px;
+    }
+    .bold-btn:hover { border-color: rgba(95,255,176,0.45); color: #5fffb0; background: rgba(95,255,176,0.07); }
+    .bold-btn:active { transform: scale(0.94); }
+
+    .tweet-textarea {
+      width: 100%; background: transparent;
+      border: none; outline: none;
+      color: #e2e8f0; font-size: 15px;
+      line-height: 1.65; padding: 0;
+      resize: none; overflow: hidden;
+      font-family: inherit; min-height: 40px;
+      display: block;
+    }
+    .tweet-textarea::placeholder { color: #334155; }
+
+    /* ── Emoji picker ── */
+    .emoji-btn {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 6px;
+      color: rgba(255,255,255,0.5);
+      font-size: 14px;
+      padding: 2px 7px;
+      cursor: pointer;
+      transition: all 0.15s;
+      line-height: 1;
+      position: relative;
+    }
+    .emoji-btn:hover { border-color: rgba(255,255,255,0.25); background: rgba(255,255,255,0.08); }
+    .emoji-picker {
+      display: none;
+      position: absolute;
+      top: 100%;
+      right: 0;
+      z-index: 100;
+      background: rgba(22,26,36,0.97);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 12px;
+      padding: 10px;
+      width: 280px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      margin-top: 4px;
+    }
+    .emoji-picker.open { display: block; }
+    .emoji-picker-search {
+      width: 100%;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 6px;
+      color: #e2e8f0;
+      font-size: 12px;
+      padding: 5px 8px;
+      margin-bottom: 8px;
+      outline: none;
+    }
+    .emoji-picker-search::placeholder { color: rgba(255,255,255,0.3); }
+    .emoji-picker-grid {
+      display: grid;
+      grid-template-columns: repeat(8, 1fr);
+      gap: 2px;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    .emoji-picker-grid::-webkit-scrollbar { width: 4px; }
+    .emoji-picker-grid::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+    .emoji-pick {
+      font-size: 18px;
+      padding: 4px;
+      text-align: center;
+      cursor: pointer;
+      border-radius: 6px;
+      transition: background 0.1s;
+      line-height: 1.3;
+    }
+    .emoji-pick:hover { background: rgba(255,255,255,0.1); }
+    .emoji-section-label {
+      font-size: 10px;
+      color: rgba(255,255,255,0.3);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-weight: 700;
+      padding: 6px 2px 3px;
+      grid-column: 1 / -1;
+    }
+
+    /* Image attached to tweet */
+    .tweet-image {
+      display: none; margin-top: 12px;
+      border-radius: 14px; overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.07);
+      max-height: 320px;
+    }
+    .tweet-image.visible { display: block; }
+    .tweet-image img {
+      width: 100%; height: auto; max-height: 320px;
+      object-fit: cover; display: block;
+    }
+
+    /* Actions row */
+    .tweet-actions-row {
+      padding: 14px 22px 18px;
+      border-top: 1px solid rgba(255,255,255,0.05);
+      display: flex; gap: 8px; align-items: center;
+    }
+
+    .post-btn {
+      flex: 1; background: #1d9bf0; border: none; border-radius: 50px;
+      color: #fff; font-size: 14px; font-weight: 700; padding: 10px 20px;
+      cursor: pointer; transition: opacity 0.2s, transform 0.1s;
+      letter-spacing: -0.1px;
+    }
+    .post-btn:hover { opacity: 0.88; transform: translateY(-1px); }
+    .post-btn:active { transform: translateY(0); }
+    .post-btn:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
+
+    .queue-btn {
+      flex: 1; background: transparent;
+      border: 1px solid rgba(95,255,176,0.35);
+      border-radius: 50px; color: #5fffb0;
+      font-size: 14px; font-weight: 700; padding: 10px 20px;
+      cursor: pointer; transition: all 0.15s;
+    }
+    .queue-btn:hover { background: rgba(95,255,176,0.08); border-color: rgba(95,255,176,0.6); }
+    .queue-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+    .regen-btn {
+      background: transparent;
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 50px; color: #64748b;
+      font-size: 13px; font-weight: 600; padding: 10px 18px;
+      cursor: pointer; transition: all 0.15s; white-space: nowrap;
+    }
+    .regen-btn:hover { border-color: rgba(255,255,255,0.18); color: #94a3b8; }
+
+    /* ── Tab nav ── */
+    .tab-nav {
+      width: 100%; max-width: 640px;
+      display: flex; gap: 4px; padding: 6px;
+      margin-bottom: 16px;
+    }
+    .tab-btn {
+      flex: 1; background: transparent;
+      border: none; border-radius: 10px;
+      color: #475569; font-size: 13px; font-weight: 700;
+      padding: 9px 16px; cursor: pointer;
+      transition: all 0.15s; letter-spacing: -0.1px;
+    }
+    .tab-btn:hover { color: #94a3b8; background: rgba(255,255,255,0.04); }
+    .tab-btn.active { background: rgba(255,255,255,0.08); color: #fff; }
+
+    /* ── Position matched card (replaces slip zone when matched) ── */
+    .position-card {
+      border: 1.5px solid rgba(95,255,176,0.3); border-radius: 12px;
+      background: rgba(95,255,176,0.04); padding: 14px 16px;
+      display: none; position: relative;
+    }
+    .position-card.visible { display: block; }
+    .position-card-header {
+      display: flex; align-items: flex-start; justify-content: space-between;
+      gap: 8px; margin-bottom: 10px;
+    }
+    .position-market {
+      font-size: 12px; font-weight: 600; color: #e2e8f0;
+      line-height: 1.4; flex: 1;
+    }
+    .position-outcome {
+      font-size: 11px; font-weight: 800; padding: 3px 8px;
+      border-radius: 5px; flex-shrink: 0;
+      background: rgba(95,255,176,0.15); color: #5fffb0;
+    }
+    .position-outcome.no { background: rgba(248,113,113,0.15); color: #f87171; }
+    .position-stats {
+      display: grid; grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px; margin-bottom: 8px;
+    }
+    .pos-stat { text-align: center; }
+    .pos-stat-label { font-size: 10px; color: #475569; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+    .pos-stat-value { font-size: 13px; color: #e2e8f0; font-weight: 700; margin-top: 2px; }
+    .position-swap-row {
+      display: flex; gap: 10px; align-items: center; margin-top: 2px;
+    }
+    .position-swap-btn {
+      font-size: 10px; font-weight: 600; color: #818cf8;
+      background: none; border: none; cursor: pointer;
+      text-decoration: underline; padding: 0;
+    }
+    .position-swap-btn:hover { color: #a5b4fc; }
+    .position-clear-btn {
+      font-size: 10px; font-weight: 600; color: #475569;
+      background: none; border: none; cursor: pointer;
+      text-decoration: underline; padding: 0;
+    }
+    .position-clear-btn:hover { color: #94a3b8; }
+    .position-swap-picker {
+      margin-top: 8px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap;
+    }
+    .position-swap-picker .position-select {
+      flex: 1; min-width: 0; font-size: 11px;
+    }
+    .position-loading {
+      display: none; text-align: center; padding: 28px 12px;
+      color: #475569; font-size: 12px; font-weight: 600;
+    }
+    .position-loading.visible { display: block; }
+    .position-none {
+      display: none; padding: 10px 0 4px;
+    }
+    .position-none.visible { display: block; }
+    .position-none-label {
+      font-size: 11px; color: #475569; font-weight: 600;
+      margin-bottom: 8px;
+    }
+    .position-select {
+      width: 100%; background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1); border-radius: 10px;
+      color: #e2e8f0; font-size: 12px; font-weight: 600;
+      padding: 9px 12px; outline: none; cursor: pointer;
+      font-family: inherit; margin-bottom: 8px;
+      transition: border-color 0.2s;
+    }
+    .position-select:focus { border-color: rgba(95,255,176,0.45); }
+    .position-select option { background: #0f1420; color: #e2e8f0; }
+    .position-select-btn {
+      width: 100%; background: rgba(95,255,176,0.1);
+      border: 1px solid rgba(95,255,176,0.3); border-radius: 8px;
+      color: #5fffb0; font-size: 12px; font-weight: 700;
+      padding: 8px; cursor: pointer; transition: all 0.15s;
+      font-family: inherit;
+    }
+    .position-select-btn:hover { background: rgba(95,255,176,0.18); }
+    .position-or { font-size: 11px; color: #334155; text-align: center; margin: 8px 0; }
+
+    /* ── Winners tab ── */
+    .winners-card {
+      width: 100%; max-width: 640px;
+      padding: 22px; margin-bottom: 16px;
+    }
+    .winners-header {
+      display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;
+    }
+    .winners-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #475569; }
+
+    .winners-subtabs {
+      display: flex; gap: 4px; margin-bottom: 18px;
+      background: rgba(255,255,255,0.04); border-radius: 8px; padding: 3px;
+    }
+    .winners-subtab {
+      flex: 1; padding: 6px 0; font-size: 11px; font-weight: 700;
+      text-align: center; border-radius: 6px; border: none; cursor: pointer;
+      background: none; color: #475569; transition: all 0.15s; letter-spacing: 0.3px;
+    }
+    .winners-subtab.active {
+      background: rgba(255,255,255,0.08); color: #e2e8f0;
+    }
+    .winners-subtab:hover:not(.active) { color: #94a3b8; }
+
+    .winner-item {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 14px; padding: 16px; margin-bottom: 10px;
+      transition: border-color 0.2s;
+    }
+    .winner-item:hover { border-color: rgba(255,255,255,0.1); }
+    .winner-item.won { border-color: rgba(95,255,176,0.25); background: rgba(95,255,176,0.03); }
+
+    .winner-item-header {
+      display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;
+    }
+    .winner-date { font-size: 12px; color: #475569; font-weight: 600; }
+    .winner-badge {
+      font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 20px;
+      background: rgba(95,255,176,0.15); color: #5fffb0;
+    }
+    .winner-badge.pending {
+      background: rgba(148,163,184,0.12); color: #64748b;
+    }
+    .winner-market {
+      font-size: 12px; color: #64748b; font-weight: 600; margin-bottom: 8px;
+      font-style: italic;
+    }
+    .winner-slip-img {
+      width: 100%;
+      max-height: 200px;
+      object-fit: cover;
+      border-radius: 12px;
+      cursor: pointer;
+      border: 1px solid rgba(255,255,255,0.08);
+      transition: border-color 0.2s, transform 0.15s;
+      margin-bottom: 12px;
+      display: block;
+    }
+    .winner-slip-img:hover {
+      border-color: rgba(95,255,176,0.4);
+      transform: scale(1.01);
+    }
+    .winner-tweet-preview {
+      font-size: 13px; color: #94a3b8; line-height: 1.55;
+      white-space: pre-wrap; margin-bottom: 12px;
+      display: -webkit-box; -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical; overflow: hidden;
+    }
+    .winner-actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+    .winner-tweet-link {
+      font-size: 12px; font-weight: 600; color: #1d9bf0;
+      background: rgba(29,155,240,0.1); border: 1px solid rgba(29,155,240,0.3);
+      padding: 6px 12px; border-radius: 8px;
+      cursor: pointer; transition: all 0.15s;
+      text-decoration: none; display: inline-block;
+    }
+    .winner-tweet-link:hover {
+      background: rgba(29,155,240,0.15);
+      border-color: rgba(29,155,240,0.5);
+    }
+    .qt-btn {
+      background: linear-gradient(135deg, #5fffb0 0%, #3dd68c 100%);
+      border: none; border-radius: 8px; color: #060810;
+      font-size: 12px; font-weight: 700; padding: 7px 16px;
+      cursor: pointer; transition: opacity 0.15s;
+    }
+    .qt-btn:hover { opacity: 0.85; }
+    .winners-empty { text-align: center; color: #334155; font-size: 13px; padding: 40px 0; }
+
+    /* ── QT modal ── */
+    .qt-modal-bg {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.75); backdrop-filter: blur(6px);
+      z-index: 200; align-items: center; justify-content: center; padding: 20px;
+    }
+    .qt-modal-bg.open { display: flex; }
+    .qt-modal {
+      background: rgba(18,22,32,0.97);
+      border: 1px solid rgba(255,255,255,0.1);
+      backdrop-filter: blur(32px);
+      border-radius: 18px; padding: 26px;
+      width: 100%; max-width: 560px;
+    }
+    .qt-modal-title { font-size: 16px; font-weight: 700; color: #fff; margin-bottom: 6px; }
+    .qt-modal-sub { font-size: 12px; color: #475569; margin-bottom: 18px; }
+    .qt-original {
+      background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 10px; padding: 12px 14px; font-size: 12px; color: #64748b;
+      line-height: 1.55; white-space: pre-wrap; margin-bottom: 16px;
+      display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+    }
+    .qt-loading { text-align: center; padding: 20px; color: #64748b; font-size: 13px; display: none; }
+    .qt-result {
+      width: 100%; background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 10px; color: #e2e8f0; font-size: 14px;
+      line-height: 1.65; padding: 12px 14px; outline: none;
+      resize: vertical; min-height: 80px; font-family: inherit;
+      transition: border-color 0.2s; display: none; margin-bottom: 14px;
+    }
+    .qt-result:focus { border-color: rgba(95,255,176,0.45); }
+    .qt-modal-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .qt-queue-btn {
+      flex: 1; background: linear-gradient(135deg, #5fffb0 0%, #3dd68c 100%);
+      border: none; border-radius: 10px; color: #060810;
+      font-size: 14px; font-weight: 700; padding: 11px; cursor: pointer;
+      display: none; min-width: 120px;
+    }
+    .qt-queue-btn:hover { opacity: 0.9; }
+    .qt-queue-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+    .qt-post-btn {
+      flex: 1; background: #1d9bf0;
+      border: none; border-radius: 10px; color: #fff;
+      font-size: 14px; font-weight: 700; padding: 11px; cursor: pointer;
+      display: none; min-width: 120px;
+      transition: opacity 0.2s, transform 0.1s;
+    }
+    .qt-post-btn:hover { opacity: 0.88; transform: translateY(-1px); }
+    .qt-post-btn:active { transform: translateY(0); }
+    .qt-post-btn:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
+    .qt-cancel-btn {
+      flex: 1; background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 10px; color: #64748b;
+      font-size: 14px; font-weight: 600; padding: 11px; cursor: pointer;
+      transition: border-color 0.15s, color 0.15s; min-width: 100px;
+    }
+    .qt-cancel-btn:hover { border-color: rgba(255,255,255,0.18); color: #94a3b8; }
+
+    /* ── Queue panel ── */
+    .queue-card {
+      width: 100%; max-width: 640px;
+      padding: 22px; margin-bottom: 16px;
+    }
+    .queue-header {
+      display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;
+    }
+    .queue-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #475569; }
+    .refresh-btn {
+      background: none; border: none; color: #475569; font-size: 11px;
+      cursor: pointer; font-weight: 600; transition: color 0.15s;
+    }
+    .refresh-btn:hover { color: #5fffb0; }
+
+    .queue-item {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 12px; padding: 14px 16px; margin-bottom: 8px;
+      transition: border-color 0.2s;
+    }
+    .queue-item:hover { border-color: rgba(255,255,255,0.1); }
+    .queue-item-header {
+      display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;
+    }
+    .queue-time { font-size: 12px; color: #5fffb0; font-weight: 600; }
+    .queue-status { font-size: 11px; color: #475569; text-transform: uppercase; letter-spacing: 0.5px; }
+    .queue-status.failed { color: #f87171; }
+    .queue-badges { display: flex; gap: 4px; align-items: center; }
+    .queue-image-badge {
+      font-size: 10px; color: #64748b;
+      background: rgba(255,255,255,0.06);
+      padding: 2px 6px; border-radius: 4px;
+      font-weight: 600;
+    }
+
+    .queue-tweet-preview {
+      font-size: 13px; color: #64748b; line-height: 1.5;
+      white-space: pre-wrap; margin-bottom: 10px;
+      max-height: 52px; overflow: hidden;
+      -webkit-mask-image: linear-gradient(to bottom, black 55%, transparent 100%);
+    }
+
+    .queue-actions { display: flex; gap: 6px; }
+    .queue-action-btn {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 7px; color: #64748b;
+      font-size: 11px; font-weight: 600;
+      padding: 5px 12px; cursor: pointer; transition: all 0.15s;
+    }
+    .queue-action-btn:hover { border-color: rgba(95,255,176,0.4); color: #5fffb0; }
+    .queue-action-btn.cancel { color: #f87171; }
+    .queue-action-btn.cancel:hover { border-color: rgba(248,113,113,0.4); }
+
+    .queue-empty { text-align: center; color: #334155; font-size: 13px; padding: 24px 0; }
+
+    /* ── Edit modal ── */
+    .modal-bg {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.75); backdrop-filter: blur(6px);
+      z-index: 100; align-items: center; justify-content: center; padding: 20px;
+    }
+    .modal-bg.open { display: flex; }
+    .modal {
+      background: rgba(18,22,32,0.97);
+      border: 1px solid rgba(255,255,255,0.1);
+      backdrop-filter: blur(32px);
+      border-radius: 18px; padding: 26px;
+      width: 100%; max-width: 560px;
+    }
+    .modal-title { font-size: 16px; font-weight: 700; color: #fff; margin-bottom: 18px; }
+    .modal-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: #475569; margin-bottom: 8px; }
+    .modal textarea {
+      width: 100%; background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 10px; color: #e2e8f0; font-size: 14px;
+      line-height: 1.65; padding: 12px 14px; outline: none;
+      resize: vertical; min-height: 90px; font-family: inherit;
+      transition: border-color 0.2s; margin-bottom: 14px;
+    }
+    .modal textarea:focus { border-color: rgba(95,255,176,0.45); }
+    .modal-actions { display: flex; gap: 8px; margin-top: 4px; }
+    .modal-save {
+      flex: 1; background: linear-gradient(135deg, #5fffb0 0%, #3dd68c 100%);
+      border: none; border-radius: 10px;
+      color: #060810; font-size: 14px; font-weight: 700; padding: 11px; cursor: pointer;
+    }
+    .modal-save:hover { opacity: 0.9; }
+    .modal-cancel {
+      flex: 1; background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 10px; color: #64748b;
+      font-size: 14px; font-weight: 600; padding: 11px; cursor: pointer;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .modal-cancel:hover { border-color: rgba(255,255,255,0.18); color: #94a3b8; }
+
+    /* ── Affiliate QT ── */
+    .aff-filter {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.1);
+      color: rgba(255,255,255,0.6);
+      font-size: 12px;
+      font-weight: 600;
+      padding: 5px 12px;
+      border-radius: 20px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .aff-filter:hover { border-color: rgba(255,255,255,0.25); color: #e2e8f0; }
+    .aff-filter.active { background: rgba(29,155,240,0.15); border-color: rgba(29,155,240,0.4); color: #1d9bf0; }
+
+    .aff-tweet-card {
+      padding: 14px;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.06);
+      background: rgba(0,0,0,0.15);
+      margin-bottom: 10px;
+      transition: border-color 0.15s;
+    }
+    .aff-tweet-card:hover { border-color: rgba(255,255,255,0.15); }
+
+    .aff-tweet-text {
+      font-size: 13px;
+      color: rgba(255,255,255,0.75);
+      line-height: 1.55;
+      margin-bottom: 10px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .aff-tweet-meta {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      font-size: 11px;
+      color: rgba(255,255,255,0.3);
+      margin-bottom: 8px;
+    }
+
+    .aff-tweet-cats {
+      display: flex;
+      gap: 5px;
+      flex-wrap: wrap;
+      margin-bottom: 8px;
+    }
+
+    .aff-cat-badge {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+    .aff-cat-badge.profit { background: rgba(95,255,176,0.12); color: #5fffb0; }
+    .aff-cat-badge.arbitrage { background: rgba(168,85,247,0.12); color: #a855f7; }
+    .aff-cat-badge.thread { background: rgba(251,191,36,0.12); color: #fbbf24; }
+    .aff-cat-badge.affiliate { background: rgba(29,155,240,0.12); color: #1d9bf0; }
+    .aff-cat-badge.general { background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.4); }
+
+    .aff-qt-btn {
+      background: rgba(29,155,240,0.12);
+      border: 1px solid rgba(29,155,240,0.3);
+      color: #1d9bf0;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 5px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .aff-qt-btn:hover { background: rgba(29,155,240,0.25); border-color: rgba(29,155,240,0.5); }
+
+    .aff-suggestion-btn {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      color: rgba(255,255,255,0.5);
+      font-size: 11px;
+      padding: 6px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      text-align: left;
+      transition: all 0.15s;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .aff-suggestion-btn:hover { border-color: rgba(29,155,240,0.3); color: #1d9bf0; }
+
+    .aff-tweet-media {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 10px;
+      overflow-x: auto;
+    }
+    .aff-tweet-img {
+      max-height: 160px;
+      max-width: 280px;
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.08);
+      object-fit: cover;
+    }
+  </style>
+</head>
+<body>
+
+<div class="toast" id="toast"></div>
+
+<!-- Edit modal -->
+<div class="modal-bg" id="editModal">
+  <div class="modal">
+    <div class="modal-title">Edit Queued Thread</div>
+    <div class="modal-label">Tweet 1 <span style="position:relative;display:inline-block;vertical-align:middle;margin-left:6px;"><button class="emoji-btn" onclick="toggleEmojiPicker(event,'modalTweet1')">😀</button></span></div>
+    <textarea id="modalTweet1" rows="4"></textarea>
+    <div class="modal-label">Tweet 2 <span style="position:relative;display:inline-block;vertical-align:middle;margin-left:6px;"><button class="emoji-btn" onclick="toggleEmojiPicker(event,'modalTweet2')">😀</button></span></div>
+    <textarea id="modalTweet2" rows="6"></textarea>
+    <div class="modal-actions">
+      <button class="modal-cancel" onclick="closeModal()">Cancel</button>
+      <button class="modal-save" onclick="saveModal()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- Header -->
+<div class="header glass">
+  <div class="logo">
+    <div class="logo-mark">𝕏</div>
+    <h1>PI Poster</h1>
+  </div>
+  <div id="authArea">
+    <a href="/auth/twitter" class="connect-btn">
+      <span>𝕏</span> Connect Twitter
+    </a>
+  </div>
+</div>
+
+<!-- QT modal -->
+<div class="qt-modal-bg" id="qtModalBg">
+  <div class="qt-modal">
+    <div class="qt-modal-title">Generate Quote Tweet</div>
+    <div class="qt-modal-sub" id="qtModalMarket"></div>
+    <div class="qt-original" id="qtOriginalPreview"></div>
+    <div class="qt-loading" id="qtLoading"><span class="spinner"></span> Writing QT...</div>
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;"><span style="position:relative;"><button class="emoji-btn" onclick="toggleEmojiPicker(event,'qtResultText')">😀</button></span></div>
+    <textarea class="qt-result" id="qtResultText" placeholder="QT will appear here..."></textarea>
+    <div class="qt-modal-actions">
+      <button class="qt-cancel-btn" onclick="closeQtModal()">Cancel</button>
+      <button class="qt-queue-btn" id="qtQueueBtn" onclick="queueQT()">Add QT to Queue</button>
+      <button class="qt-post-btn" id="qtPostBtn" onclick="postQTNow()">Post Now 𝕏</button>
+    </div>
+  </div>
+</div>
+
+<!-- Tab navigation -->
+<div class="tab-nav glass">
+  <button class="tab-btn active" id="tabBtnGenerate" onclick="switchTab('generate')">⚡ Generate</button>
+  <button class="tab-btn" id="tabBtnWinners" onclick="switchTab('winners')">🏆 Winners</button>
+  <button class="tab-btn" id="tabBtnAffiliate" onclick="switchTab('affiliate')">📡 Affiliate QT</button>
+  <button class="tab-btn" id="tabBtnStreamer" onclick="switchTab('streamer')">🎙 Streamer</button>
+  <button class="tab-btn" id="tabBtnAnalytics" onclick="switchTab('analytics')">📊 Analytics</button>
+</div>
+
+<!-- Generate tab -->
+<div id="tabGenerate">
+
+<!-- Generator card -->
+<div class="main-card glass">
+  <div class="section-title">Generate Thread</div>
+
+  <div class="upload-row">
+    <div>
+      <div class="upload-label">Betting Slip <span class="badge">Optional</span></div>
+      <div class="upload-zone" id="slipZone">
+        <input type="file" id="slipInput" accept="image/*" />
+        <div class="upload-empty">
+          <div class="upload-icon">🧾</div>
+          <div class="upload-title">Betting Slip</div>
+          <div class="upload-hint">drop or click to browse</div>
+        </div>
+        <div class="upload-preview" id="slipPreview">
+          <img id="slipImg" src="" alt="Slip" />
+          <div class="preview-actions">
+            <button class="preview-btn" onclick="event.stopPropagation(); document.getElementById('slipInput').click()">Change</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="upload-label">Tool Card <span class="req">*</span></div>
+      <div class="upload-zone" id="toolZone">
+        <input type="file" id="toolInput" accept="image/*" />
+        <div class="upload-empty">
+          <div class="upload-icon">📊</div>
+          <div class="upload-title">Tool Card</div>
+          <div class="upload-hint">drop or click to browse</div>
+        </div>
+        <div class="upload-preview" id="toolPreview">
+          <img id="toolImg" src="" alt="Tool card" />
+          <div class="preview-actions">
+            <button class="preview-btn" onclick="event.stopPropagation(); document.getElementById('toolInput').click()">Change</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="upload-label" style="margin-bottom:10px;">Style <span class="badge">Optional</span></div>
+  <div class="style-row">
+    <button class="style-btn active" data-style="">Auto</button>
+    <button class="style-btn" data-style="Sharp & Direct">Sharp</button>
+    <button class="style-btn" data-style="Hype">Hype</button>
+    <button class="style-btn" data-style="Analytical">Analytical</button>
+    <button class="style-btn" data-style="Casual">Casual</button>
+  </div>
+
+  <div class="upload-label" style="margin-bottom:8px;">Custom Label <span class="badge">Optional</span></div>
+  <input class="text-input" id="labelInput" type="text" placeholder='e.g. "Polymarket NUKE"' maxlength="40" />
+
+  <button class="generate-btn" id="generateBtn" onclick="generate()">Generate Thread</button>
+</div>
+
+<div class="loading" id="loading"><span class="spinner"></span>Analyzing with Claude...</div>
+<div class="error-msg" id="errorMsg"></div>
+
+<!-- Tweet editor — Twitter thread style -->
+<div class="tweet-section glass tweet-section-card" id="tweetSection">
+
+  <div class="thread-header">
+    <div class="thread-header-title">Your Thread</div>
+  </div>
+
+  <!-- Tweet 1 -->
+  <div class="tweet-compose" id="compose1">
+    <div class="tweet-left">
+      <div class="tweet-avatar">𝕏</div>
+      <div class="thread-line"></div>
+    </div>
+    <div class="tweet-right">
+      <div class="tweet-meta">
+        <span class="tweet-handle" id="tweetHandle">@you</span>
+        <span class="tweet-num">Tweet 1 · Hook</span>
+        <button class="bold-btn" onclick="applyBold('tweet1')" title="Bold (⌘B)"><b>B</b></button>
+        <span style="position:relative;"><button class="emoji-btn" onclick="toggleEmojiPicker(event,'tweet1')">😀</button></span>
+      </div>
+      <textarea class="tweet-textarea" id="tweet1" placeholder="What's happening?" oninput="autoResize(this)"></textarea>
+      <div class="tweet-image" id="tweetImg1">
+        <img id="tweetImgSrc1" src="" alt="" />
+      </div>
+    </div>
+  </div>
+
+  <!-- Tweet 2 -->
+  <div class="tweet-compose" id="compose2">
+    <div class="tweet-left">
+      <div class="tweet-avatar">𝕏</div>
+    </div>
+    <div class="tweet-right">
+      <div class="tweet-meta">
+        <span class="tweet-handle" id="tweetHandle2">@you</span>
+        <span class="tweet-num">Tweet 2 · Breakdown</span>
+        <button class="bold-btn" onclick="applyBold('tweet2')" title="Bold (⌘B)"><b>B</b></button>
+        <span style="position:relative;"><button class="emoji-btn" onclick="toggleEmojiPicker(event,'tweet2')">😀</button></span>
+      </div>
+      <textarea class="tweet-textarea" id="tweet2" placeholder="Continue the thread..." oninput="autoResize(this)"></textarea>
+      <div class="tweet-image" id="tweetImg2">
+        <img id="tweetImgSrc2" src="" alt="" />
+      </div>
+    </div>
+  </div>
+
+  <!-- Actions -->
+  <div class="tweet-actions-row">
+    <button class="post-btn" id="postNowBtn" onclick="postNow()">Post Now 𝕏</button>
+    <button class="queue-btn" id="queueBtn" onclick="addToQueue()">Add to Queue</button>
+    <button class="regen-btn" onclick="generate()">↺ Regen</button>
+  </div>
+
+</div>
+
+<!-- Queue card -->
+<div class="glass queue-card" id="queuePanel" style="display:none;">
+  <div class="queue-header">
+    <span class="queue-title">Scheduled Queue</span>
+    <button class="refresh-btn" onclick="loadQueue()">↺ Refresh</button>
+  </div>
+  <div id="queueList"><div class="queue-empty">Queue is empty</div></div>
+</div>
+
+</div><!-- end tabGenerate -->
+
+<!-- Winners tab -->
+<div id="tabWinners" style="display:none;">
+<div class="glass winners-card">
+  <div class="winners-header">
+    <span class="winners-title">Post History</span>
+    <button class="refresh-btn" onclick="loadWinners()">↺ Refresh</button>
+  </div>
+  <div class="winners-subtabs">
+    <button class="winners-subtab active" id="subtabWon"  onclick="switchWinnersSubtab('won')">🏆 Winners</button>
+    <button class="winners-subtab"        id="subtabAll"  onclick="switchWinnersSubtab('all')">📋 All Posts</button>
+  </div>
+  <div id="winnersList"><div class="winners-empty">Loading...</div></div>
+</div>
+</div><!-- end tabWinners -->
+
+<!-- Affiliate QT tab -->
+<div id="tabAffiliate" style="display:none;">
+<div class="glass" style="max-width:700px;width:100%;padding:28px 24px;">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+    <span style="font-size:18px;font-weight:700;color:#e2e8f0;">Affiliate QT</span>
+    <button class="refresh-btn" onclick="loadOjFeed(true)">↺ Refresh</button>
+  </div>
+
+  <p style="font-size:13px;color:rgba(255,255,255,0.45);margin-bottom:16px;line-height:1.5;">
+    @OddsJam tweets from the past 24 hours. Filter by category, then QT and queue.
+  </p>
+
+  <!-- Category filters -->
+  <div id="affFilterBar" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:18px;">
+    <button class="aff-filter active" data-cat="all" onclick="setAffFilter('all')">All</button>
+    <button class="aff-filter" data-cat="profit" onclick="setAffFilter('profit')">💰 Big Profits</button>
+    <button class="aff-filter" data-cat="arbitrage" onclick="setAffFilter('arbitrage')">🔒 Arbitrage</button>
+    <button class="aff-filter" data-cat="thread" onclick="setAffFilter('thread')">🧵 Threads</button>
+    <button class="aff-filter" data-cat="affiliate" onclick="setAffFilter('affiliate')">📢 Affiliate</button>
+    <button class="aff-filter" data-cat="top" onclick="setAffFilter('top')">🔥 Top Engagement</button>
+  </div>
+
+  <!-- Sort control -->
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;">
+    <span style="font-size:11px;color:rgba(255,255,255,0.35);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Sort:</span>
+    <select id="affSortSelect" onchange="renderAffFeed()" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:#e2e8f0;font-size:12px;padding:4px 8px;border-radius:6px;outline:none;">
+      <option value="engagement">Engagement (High → Low)</option>
+      <option value="recent">Most Recent</option>
+      <option value="oldest">Oldest First</option>
+    </select>
+  </div>
+
+  <!-- Feed -->
+  <div id="affFeedList"><div class="winners-empty">Click Refresh to load @OddsJam feed</div></div>
+</div>
+
+<!-- Affiliate QT Modal -->
+<div id="affQtModalBg" class="modal-bg" onclick="if(event.target===this)closeAffQtModal()">
+  <div class="modal glass" style="max-width:520px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <span style="font-size:15px;font-weight:700;">Quote Tweet</span>
+      <button onclick="closeAffQtModal()" style="background:none;border:none;color:rgba(255,255,255,0.5);font-size:18px;cursor:pointer;">✕</button>
+    </div>
+    <div id="affQtOriginal" style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:12px;max-height:100px;overflow-y:auto;padding:10px;background:rgba(0,0,0,0.2);border-radius:8px;line-height:1.5;"></div>
+    <div id="affQtCategory" style="font-size:11px;color:rgba(255,255,255,0.3);margin-bottom:10px;"></div>
+
+    <!-- Past QT suggestions -->
+    <div id="affQtSuggestions" style="display:none;margin-bottom:10px;">
+      <div style="font-size:11px;color:rgba(255,255,255,0.35);font-weight:600;margin-bottom:6px;">PAST QTs (click to use):</div>
+      <div id="affQtSuggestionsList" style="display:flex;flex-direction:column;gap:4px;max-height:100px;overflow-y:auto;"></div>
+    </div>
+
+    <!-- AI Suggestions -->
+    <div id="affAiSuggestions" style="display:none;margin-bottom:10px;">
+      <div style="font-size:11px;color:rgba(255,255,255,0.35);font-weight:600;margin-bottom:6px;">AI SUGGESTIONS (click to use):</div>
+      <div id="affAiSuggestionsList" style="display:flex;flex-direction:column;gap:4px;max-height:120px;overflow-y:auto;"></div>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+      <span style="position:relative;"><button class="emoji-btn" onclick="toggleEmojiPicker(event,'affQtText')">😀</button></span>
+      <button id="affAiSuggestBtn" onclick="generateAiQtSuggestions()" style="background:linear-gradient(135deg,#7c3aed,#6d28d9);border:none;color:#fff;padding:4px 12px;border-radius:6px;font-size:11px;cursor:pointer;font-weight:600;">AI Suggest</button>
+    </div>
+    <textarea id="affQtText" class="tweet-textarea" rows="3" placeholder="Write your quote tweet..." style="width:100%;margin-bottom:12px;"></textarea>
+    <div style="display:flex;gap:8px;">
+      <button class="post-btn" id="affQtQueueBtn" onclick="queueAffQT()" style="flex:1;">Add to Queue</button>
+      <button class="qt-post-btn" id="affQtPostBtn" onclick="postAffQTNow()" style="flex:1;display:block;">Post Now 𝕏</button>
+    </div>
+  </div>
+</div>
+</div><!-- end tabAffiliate -->
+
+<!-- Streamer Tab -->
+<div id="tabStreamer" class="glass card" style="display:none;">
+  <h2 style="margin-bottom:16px;font-size:18px;">Streamer Post Tool</h2>
+
+  <!-- Mode toggle: Thread vs Quote Tweet -->
+  <div style="display:flex;gap:8px;margin-bottom:16px;">
+    <button id="streamerModeThread" class="tab-btn active" onclick="setStreamerMode('thread')" style="flex:1;padding:8px;border-radius:8px;font-size:12px;font-weight:600;">New Thread</button>
+    <button id="streamerModeQt" class="tab-btn" onclick="setStreamerMode('qt')" style="flex:1;padding:8px;border-radius:8px;font-size:12px;font-weight:600;">Quote Tweet</button>
+  </div>
+
+  <!-- Thread Composer -->
+  <div id="streamerThreadForm">
+    <div style="margin-bottom:12px;">
+      <label style="font-size:12px;color:rgba(255,255,255,0.5);font-weight:600;display:block;margin-bottom:4px;">TWEET 1</label>
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;"><span style="position:relative;"><button class="emoji-btn" onclick="toggleEmojiPicker(event,'streamerTweet1')">😀</button></span></div>
+      <textarea id="streamerTweet1" class="tweet-textarea" rows="4" placeholder="First tweet..." style="width:100%;"></textarea>
+      <div style="margin-top:6px;">
+        <label style="font-size:11px;color:rgba(255,255,255,0.4);cursor:pointer;display:inline-flex;align-items:center;gap:4px;">
+          <input type="file" id="streamerImg1" accept="image/*" style="display:none;" onchange="previewStreamerImg(1)">
+          📎 Add image
+        </label>
+        <span id="streamerImg1Preview" style="font-size:11px;color:rgba(255,255,255,0.3);margin-left:8px;"></span>
+        <button id="streamerImg1Clear" onclick="clearStreamerImg(1)" style="display:none;background:none;border:none;color:#ef4444;font-size:11px;cursor:pointer;margin-left:4px;">✕ Remove</button>
+      </div>
+    </div>
+
+    <div style="margin-bottom:16px;">
+      <label style="font-size:12px;color:rgba(255,255,255,0.5);font-weight:600;display:block;margin-bottom:4px;">TWEET 2</label>
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;"><span style="position:relative;"><button class="emoji-btn" onclick="toggleEmojiPicker(event,'streamerTweet2')">😀</button></span></div>
+      <textarea id="streamerTweet2" class="tweet-textarea" rows="4" placeholder="Second tweet (reply)..." style="width:100%;"></textarea>
+      <div style="margin-top:6px;">
+        <label style="font-size:11px;color:rgba(255,255,255,0.4);cursor:pointer;display:inline-flex;align-items:center;gap:4px;">
+          <input type="file" id="streamerImg2" accept="image/*" style="display:none;" onchange="previewStreamerImg(2)">
+          📎 Add image
+        </label>
+        <span id="streamerImg2Preview" style="font-size:11px;color:rgba(255,255,255,0.3);margin-left:8px;"></span>
+        <button id="streamerImg2Clear" onclick="clearStreamerImg(2)" style="display:none;background:none;border:none;color:#ef4444;font-size:11px;cursor:pointer;margin-left:4px;">✕ Remove</button>
+      </div>
+    </div>
+
+    <button id="streamerPostThreadBtn" class="post-btn" onclick="streamerPostThread()" style="width:100%;padding:12px;font-size:14px;">Post Thread 𝕏</button>
+  </div>
+
+  <!-- Quote Tweet Composer -->
+  <div id="streamerQtForm" style="display:none;">
+    <div style="margin-bottom:12px;">
+      <label style="font-size:12px;color:rgba(255,255,255,0.5);font-weight:600;display:block;margin-bottom:4px;">TWEET URL TO QUOTE</label>
+      <input id="streamerQtUrl" type="text" placeholder="Paste tweet URL (https://x.com/user/status/...)" style="width:100%;background:rgba(255,255,255,0.06);color:#fff;border:1px solid rgba(255,255,255,0.1);padding:10px 12px;border-radius:8px;font-size:13px;box-sizing:border-box;">
+    </div>
+
+    <div style="margin-bottom:12px;">
+      <label style="font-size:12px;color:rgba(255,255,255,0.5);font-weight:600;display:block;margin-bottom:4px;">YOUR QUOTE TWEET</label>
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;"><span style="position:relative;"><button class="emoji-btn" onclick="toggleEmojiPicker(event,'streamerQtText')">😀</button></span></div>
+      <textarea id="streamerQtText" class="tweet-textarea" rows="4" placeholder="Write your quote tweet..." style="width:100%;"></textarea>
+      <div style="margin-top:6px;">
+        <label style="font-size:11px;color:rgba(255,255,255,0.4);cursor:pointer;display:inline-flex;align-items:center;gap:4px;">
+          <input type="file" id="streamerQtImg" accept="image/*" style="display:none;" onchange="previewStreamerQtImg()">
+          📎 Add image
+        </label>
+        <span id="streamerQtImgPreview" style="font-size:11px;color:rgba(255,255,255,0.3);margin-left:8px;"></span>
+        <button id="streamerQtImgClear" onclick="clearStreamerQtImg()" style="display:none;background:none;border:none;color:#ef4444;font-size:11px;cursor:pointer;margin-left:4px;">✕ Remove</button>
+      </div>
+    </div>
+
+    <button id="streamerPostQtBtn" class="post-btn" onclick="streamerPostQt()" style="width:100%;padding:12px;font-size:14px;">Post Quote Tweet 𝕏</button>
+  </div>
+
+  <!-- Feed of past posts -->
+  <div style="margin-top:24px;border-top:1px solid rgba(255,255,255,0.06);padding-top:16px;">
+    <h3 style="font-size:14px;margin-bottom:12px;color:rgba(255,255,255,0.6);">Posted Tweets</h3>
+    <div id="streamerFeed" style="display:flex;flex-direction:column;gap:10px;">
+      <div style="color:rgba(255,255,255,0.3);font-size:12px;">Loading...</div>
+    </div>
+  </div>
+</div>
+
+<!-- Streamer Feed QT Modal -->
+<div id="streamerFeedQtModalBg" class="modal-bg" onclick="if(event.target===this)closeStreamerFeedQtModal()">
+  <div class="modal glass" style="max-width:520px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <span style="font-size:15px;font-weight:700;">Quote This Tweet</span>
+      <button onclick="closeStreamerFeedQtModal()" style="background:none;border:none;color:rgba(255,255,255,0.5);font-size:18px;cursor:pointer;">✕</button>
+    </div>
+    <div id="streamerFeedQtOriginal" style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:12px;max-height:100px;overflow-y:auto;padding:10px;background:rgba(0,0,0,0.2);border-radius:8px;line-height:1.5;"></div>
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;"><span style="position:relative;"><button class="emoji-btn" onclick="toggleEmojiPicker(event,'streamerFeedQtText')">😀</button></span></div>
+    <textarea id="streamerFeedQtText" class="tweet-textarea" rows="3" placeholder="Write your quote tweet..." style="width:100%;margin-bottom:12px;"></textarea>
+    <div style="margin-bottom:12px;">
+      <label style="font-size:11px;color:rgba(255,255,255,0.4);cursor:pointer;display:inline-flex;align-items:center;gap:4px;">
+        <input type="file" id="streamerFeedQtImg" accept="image/*" style="display:none;">
+        📎 Add image
+      </label>
+    </div>
+    <button class="post-btn" id="streamerFeedQtPostBtn" onclick="streamerPostFeedQt()" style="width:100%;padding:12px;">Post Quote Tweet 𝕏</button>
+  </div>
+</div>
+
+<!-- Analytics Tab -->
+<div id="tabAnalytics" class="glass card" style="display:none;">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+    <h2 style="margin:0;font-size:18px;">Analytics</h2>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <select id="analyticsRange" onchange="loadAnalytics()" style="background:rgba(255,255,255,0.06);color:#fff;border:1px solid rgba(255,255,255,0.1);padding:6px 10px;border-radius:8px;font-size:12px;">
+        <option value="7">Last 7 days</option>
+        <option value="14">Last 14 days</option>
+        <option value="30" selected>Last 30 days</option>
+        <option value="90">Last 90 days</option>
+      </select>
+      <button onclick="loadAnalytics()" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.1);color:#fff;padding:6px 12px;border-radius:8px;font-size:12px;cursor:pointer;">Refresh</button>
+    </div>
+  </div>
+
+  <!-- Summary Cards -->
+  <div id="analyticsSummary" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:20px;">
+    <div class="glass" style="padding:14px;border-radius:10px;text-align:center;">
+      <div style="font-size:11px;color:rgba(255,255,255,0.4);font-weight:600;text-transform:uppercase;margin-bottom:4px;">Total Posts</div>
+      <div id="statTotalPosts" style="font-size:28px;font-weight:800;">—</div>
+    </div>
+    <div class="glass" style="padding:14px;border-radius:10px;text-align:center;">
+      <div style="font-size:11px;color:rgba(255,255,255,0.4);font-weight:600;text-transform:uppercase;margin-bottom:4px;">PI Tweets</div>
+      <div id="statPiTweets" style="font-size:28px;font-weight:800;color:#3b82f6;">—</div>
+    </div>
+    <div class="glass" style="padding:14px;border-radius:10px;text-align:center;">
+      <div style="font-size:11px;color:rgba(255,255,255,0.4);font-weight:600;text-transform:uppercase;margin-bottom:4px;">Affiliate QTs</div>
+      <div id="statAffQTs" style="font-size:28px;font-weight:800;color:#a855f7;">—</div>
+    </div>
+    <div class="glass" style="padding:14px;border-radius:10px;text-align:center;">
+      <div style="font-size:11px;color:rgba(255,255,255,0.4);font-weight:600;text-transform:uppercase;margin-bottom:4px;">Impressions</div>
+      <div id="statImpressions" style="font-size:28px;font-weight:800;color:#f59e0b;">—</div>
+    </div>
+    <div class="glass" style="padding:14px;border-radius:10px;text-align:center;">
+      <div style="font-size:11px;color:rgba(255,255,255,0.4);font-weight:600;text-transform:uppercase;margin-bottom:4px;">Likes</div>
+      <div id="statLikes" style="font-size:28px;font-weight:800;color:#ef4444;">—</div>
+    </div>
+    <div class="glass" style="padding:14px;border-radius:10px;text-align:center;">
+      <div style="font-size:11px;color:rgba(255,255,255,0.4);font-weight:600;text-transform:uppercase;margin-bottom:4px;">Retweets</div>
+      <div id="statRetweets" style="font-size:28px;font-weight:800;color:#22c55e;">—</div>
+    </div>
+  </div>
+
+  <!-- Daily Volume Chart (simple bar chart via CSS) -->
+  <div style="margin-bottom:20px;">
+    <div style="font-size:13px;font-weight:700;margin-bottom:10px;">Daily Post Volume</div>
+    <div id="analyticsDailyChart" style="display:flex;align-items:flex-end;gap:3px;height:120px;padding:8px;background:rgba(0,0,0,0.2);border-radius:10px;overflow-x:auto;"></div>
+    <div style="display:flex;gap:12px;margin-top:6px;font-size:10px;color:rgba(255,255,255,0.4);">
+      <span><span style="display:inline-block;width:10px;height:10px;background:#3b82f6;border-radius:2px;vertical-align:middle;margin-right:3px;"></span>PI Tweets</span>
+      <span><span style="display:inline-block;width:10px;height:10px;background:#a855f7;border-radius:2px;vertical-align:middle;margin-right:3px;"></span>Affiliate QTs</span>
+    </div>
+  </div>
+
+  <!-- Top Performers -->
+  <div>
+    <div style="font-size:13px;font-weight:700;margin-bottom:10px;">Top Performers</div>
+    <div id="analyticsTopPerformers" style="display:flex;flex-direction:column;gap:6px;"></div>
+  </div>
+</div>
+
+<script>
+  // ── Tabs ──────────────────────────────────────────────────────────────────
+  function switchTab(tab) {
+    document.getElementById('tabGenerate').style.display = tab === 'generate' ? '' : 'none';
+    document.getElementById('tabWinners').style.display  = tab === 'winners'  ? '' : 'none';
+    document.getElementById('tabAffiliate').style.display = tab === 'affiliate' ? '' : 'none';
+    document.getElementById('tabStreamer').style.display  = tab === 'streamer' ? '' : 'none';
+    document.getElementById('tabAnalytics').style.display = tab === 'analytics' ? '' : 'none';
+    document.getElementById('tabBtnGenerate').classList.toggle('active', tab === 'generate');
+    document.getElementById('tabBtnWinners').classList.toggle('active',  tab === 'winners');
+    document.getElementById('tabBtnAffiliate').classList.toggle('active', tab === 'affiliate');
+    document.getElementById('tabBtnStreamer').classList.toggle('active',  tab === 'streamer');
+    document.getElementById('tabBtnAnalytics').classList.toggle('active', tab === 'analytics');
+    if (tab === 'winners') loadWinners();
+    if (tab === 'affiliate') loadOjFeed();
+    if (tab === 'streamer') loadStreamerFeed();
+    if (tab === 'analytics') loadAnalytics();
+  }
+
+  // ── Slip market data (extracted silently during generate) ────────────────────
+  let generatedMarketTitle = null;
+  let generatedEntryPrice  = null;
+  let generatedConditionId = null;
+
+
+  // ── Winners tab ────────────────────────────────────────────────────────────
+  let winnersData = [];
+  let winnersSubtab = 'won';
+
+  function switchWinnersSubtab(tab) {
+    winnersSubtab = tab;
+    document.getElementById('subtabWon').classList.toggle('active', tab === 'won');
+    document.getElementById('subtabAll').classList.toggle('active', tab === 'all');
+    renderWinners();
+  }
+
+  async function loadWinners() {
+    const el = document.getElementById('winnersList');
+    el.innerHTML = '<div class="winners-empty"><span class="spinner"></span> Loading...</div>';
+    try {
+      winnersData = await fetch('/api/winners').then(r => r.json());
+      renderWinners();
+    } catch (err) {
+      el.innerHTML = `<div class="winners-empty">Error loading: ${escHtml(err.message)}</div>`;
+    }
+  }
+
+  function renderWinners() {
+    const el = document.getElementById('winnersList');
+    const items = winnersSubtab === 'won' ? winnersData.filter(i => i.won) : winnersData;
+    if (!items.length) {
+      el.innerHTML = winnersSubtab === 'won'
+        ? '<div class="winners-empty">No resolved winners yet. Check back after your bets settle.</div>'
+        : '<div class="winners-empty">No posted tweets yet. Post a thread to start tracking.</div>';
+      return;
+    }
+    el.innerHTML = items.map((item, idx) => {
+      const date = item.posted_at
+        ? new Date(item.posted_at).toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' at ' +
+          new Date(item.posted_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        : '—';
+      const market = item.market_title ? `<div class="winner-market">${escHtml(item.market_title)}</div>` : '';
+      const badge  = item.won ? '<span class="winner-badge">🏆 Won</span>' : '<span class="winner-badge pending">⏳ Pending</span>';
+
+      // Show bet slip image if available, otherwise show tweet preview
+      let slipSection = '';
+      if (item.slip_path) {
+        const tweetId = item.tweet1_id ? escHtml(item.tweet1_id) : '';
+        slipSection = `<img class="winner-slip-img" src="/api/images/${encodeURIComponent(item.slip_path)}" alt="Bet Slip" onclick="openTweetFromWinner('${tweetId}')" />`;
+      } else {
+        slipSection = `<div class="winner-tweet-preview">${escHtml(item.tweet1)}</div>`;
+      }
+
+      // Create tweet link
+      const tweetUrl = item.tweet1_id ? `https://x.com/EVBettors/status/${item.tweet1_id}` : null;
+      const tweetLink = tweetUrl ? `<a class="winner-tweet-link" href="${tweetUrl}" target="_blank" rel="noopener">View Tweet</a>` : '';
+
+      const qtBtn = item.won
+        ? `<button class="qt-btn" onclick="openQtModal(${idx})">✍️ Generate QT</button>`
+        : '';
+
+      return `
+        <div class="winner-item ${item.won ? 'won' : ''}">
+          <div class="winner-item-header">
+            <div class="winner-date">${date}</div>
+            ${badge}
+          </div>
+          ${market}
+          ${slipSection}
+          <div class="winner-actions">
+            ${tweetLink}
+            ${qtBtn}
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  function openTweetFromWinner(tweet1Id) {
+    if (tweet1Id) {
+      window.open(`https://x.com/EVBettors/status/${tweet1Id}`, '_blank');
+    }
+  }
+
+  // ── QT modal ───────────────────────────────────────────────────────────────
+  let currentQtItem = null;
+
+  function openQtModal(idx) {
+    const visibleItems = winnersSubtab === 'won' ? winnersData.filter(i => i.won) : winnersData;
+    const item = visibleItems[idx];
+    if (!item) return;
+    currentQtItem = item;
+    document.getElementById('qtModalMarket').textContent = item.market_title || 'Resolved position';
+    document.getElementById('qtOriginalPreview').textContent = item.tweet1;
+    document.getElementById('qtLoading').style.display = 'none';
+    document.getElementById('qtResultText').style.display = 'none';
+    document.getElementById('qtQueueBtn').style.display = 'none';
+    document.getElementById('qtPostBtn').style.display = 'none';
+    document.getElementById('qtResultText').value = '';
+    document.getElementById('qtModalBg').classList.add('open');
+    generateQT(item);
+  }
+
+  function closeQtModal() {
+    document.getElementById('qtModalBg').classList.remove('open');
+    currentQtItem = null;
+  }
+
+  async function generateQT(item) {
+    document.getElementById('qtLoading').style.display = 'block';
+    document.getElementById('qtResultText').style.display = 'none';
+    document.getElementById('qtQueueBtn').style.display = 'none';
+    document.getElementById('qtPostBtn').style.display = 'none';
+    try {
+      const pos = item.position || {};
+      const entryC = pos.avgPrice ? Math.round(pos.avgPrice * 100) : '?';
+      const data = await fetch('/generate-qt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          originalTweet: item.tweet1,
+          marketTitle:   item.market_title || pos.market || '?',
+          entryPrice:    entryC,
+          cashPaidOut:   pos.cashPaidOut || pos.currentValue || null
+        })
+      }).then(r => r.json());
+      if (data.error) throw new Error(data.error);
+      document.getElementById('qtResultText').value = data.qt;
+      document.getElementById('qtResultText').style.display = 'block';
+      document.getElementById('qtQueueBtn').style.display = 'block';
+      document.getElementById('qtPostBtn').style.display = 'block';
+    } catch (err) {
+      document.getElementById('qtResultText').value = 'Error: ' + err.message;
+      document.getElementById('qtResultText').style.display = 'block';
+    } finally {
+      document.getElementById('qtLoading').style.display = 'none';
+    }
+  }
+
+  async function queueQT() {
+    if (!currentQtItem) return;
+    const qtText = document.getElementById('qtResultText').value.trim();
+    if (!qtText) return;
+
+    const btn = document.getElementById('qtQueueBtn');
+    btn.disabled = true; btn.textContent = 'Adding...';
+    try {
+      const data = await fetch('/queue/add-qt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tweet1: qtText,
+          quote_tweet_id: currentQtItem.tweet1_id,
+          market_title: currentQtItem.market_title || null
+        })
+      }).then(r => r.json());
+      if (data.error) throw new Error(data.error);
+      showToast('QT added to queue 🏆', 'success');
+      closeQtModal();
+      switchTab('generate');
+      loadQueue();
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      btn.disabled = false; btn.textContent = 'Add QT to Queue';
+    }
+  }
+
+  async function postQTNow() {
+    if (!currentQtItem) return;
+    const qtText = document.getElementById('qtResultText').value.trim();
+    if (!qtText) return;
+
+    const btn = document.getElementById('qtPostBtn');
+    btn.disabled = true; btn.textContent = 'Posting...';
+    try {
+      const data = await fetch('/post/qt-now', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tweet1: qtText,
+          quote_tweet_id: currentQtItem.tweet1_id,
+          market_title: currentQtItem.market_title || null
+        })
+      }).then(r => r.json());
+      if (data.error) throw new Error(data.error);
+      showToast('Quote tweet posted! 🎉', 'success');
+      closeQtModal();
+      loadWinners();
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      btn.disabled = false; btn.textContent = 'Post Now 𝕏';
+    }
+  }
+
+  // ── Unicode bold (renders as bold on Twitter) ──────────────────────────────
+  const BOLD_MAP = (() => {
+    const map = {};
+    const ranges = [
+      ['A', 26, 0x1D5D4], // A-Z sans-serif bold
+      ['a', 26, 0x1D5EE], // a-z sans-serif bold
+      ['0', 10, 0x1D7EC]  // 0-9 sans-serif bold
+    ];
+    ranges.forEach(([start, count, base]) => {
+      for (let i = 0; i < count; i++) {
+        map[String.fromCharCode(start.charCodeAt(0) + i)] = String.fromCodePoint(base + i);
+      }
+    });
+    return map;
+  })();
+
+  function toBold(text) {
+    return [...text].map(ch => BOLD_MAP[ch] || ch).join('');
+  }
+
+  function applyBold(id) {
+    const ta = document.getElementById(id);
+    const start = ta.selectionStart;
+    const end   = ta.selectionEnd;
+    if (start === end) return; // nothing selected
+    const before  = ta.value.slice(0, start);
+    const selected = ta.value.slice(start, end);
+    const after   = ta.value.slice(end);
+    const bolded  = toBold(selected);
+    ta.value = before + bolded + after;
+    // Restore selection over bolded text (Unicode bold chars may be multi-byte)
+    ta.setSelectionRange(start, start + [...bolded].length);
+    ta.focus();
+    autoResize(ta);
+  }
+
+  // Cmd+B / Ctrl+B on tweet textareas
+  document.addEventListener('keydown', e => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'b') {
+      const active = document.activeElement;
+      if (active && active.classList.contains('tweet-textarea')) {
+        e.preventDefault();
+        applyBold(active.id);
+      }
+    }
+  });
+
+  // ── Toast ──────────────────────────────────────────────────────────────────
+  let toastTimer;
+  function showToast(msg, type = 'success') {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.className = 'toast show ' + type;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { el.className = 'toast'; }, 2800);
+  }
+
+  // ── Auto-resize textarea ───────────────────────────────────────────────────
+  function autoResize(el) {
+    el.style.height = 'auto';
+    el.style.height = el.scrollHeight + 'px';
+  }
+  function autoResizeAll() {
+    document.querySelectorAll('.tweet-textarea').forEach(autoResize);
+  }
+
+  // ── Auth ───────────────────────────────────────────────────────────────────
+  let isConnected = false;
+  let connectedHandle = '@you';
+
+  async function checkAuth() {
+    const data = await fetch('/auth/status').then(r => r.json());
+    isConnected = data.connected;
+    const area = document.getElementById('authArea');
+    if (data.connected) {
+      connectedHandle = '@' + data.username;
+      document.querySelectorAll('.tweet-handle').forEach(el => el.textContent = connectedHandle);
+      area.innerHTML = `
+        <span style="color:#5fffb0;font-size:13px;font-weight:600;margin-right:12px;">𝕏 @${data.username}</span>
+        <button class="connect-btn disconnect" onclick="disconnect()">Disconnect</button>`;
+    } else {
+      area.innerHTML = `<a href="/auth/twitter" class="connect-btn"><span>𝕏</span> Connect Twitter</a>`;
+    }
+    return data.connected;
+  }
+
+  async function disconnect() {
+    await fetch('/auth/disconnect', { method: 'POST' });
+    checkAuth();
+    showToast('Disconnected', 'error');
+  }
+
+  // ── Upload zones ───────────────────────────────────────────────────────────
+  let slipDataUrl = null;
+  let toolDataUrl = null;
+
+  function setupUpload(inputId, zoneId, imgId, onLoad) {
+    const input = document.getElementById(inputId);
+    const zone  = document.getElementById(zoneId);
+    const img   = document.getElementById(imgId);
+    input.addEventListener('change', () => {
+      const file = input.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = e => {
+        img.src = e.target.result;
+        zone.classList.add('has-file');
+        if (onLoad) onLoad(e.target.result);
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  setupUpload('slipInput', 'slipZone', 'slipImg', url => {
+    slipDataUrl = url;
+    const tImg = document.getElementById('tweetImgSrc1');
+    if (tImg) { tImg.src = url; document.getElementById('tweetImg1').classList.add('visible'); }
+  });
+
+  setupUpload('toolInput', 'toolZone', 'toolImg', url => {
+    toolDataUrl = url;
+    const tImg = document.getElementById('tweetImgSrc2');
+    if (tImg) { tImg.src = url; document.getElementById('tweetImg2').classList.add('visible'); }
+  });
+
+  // Style buttons
+  document.querySelectorAll('.style-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.style-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  });
+
+  // ── Generate ───────────────────────────────────────────────────────────────
+  async function generate() {
+    const toolInputEl = document.getElementById('toolInput');
+    if (!toolInputEl.files[0]) {
+      document.getElementById('errorMsg').textContent = 'Upload the tool card screenshot first.';
+      document.getElementById('errorMsg').style.display = 'block';
+      return;
+    }
+    const btn     = document.getElementById('generateBtn');
+    const loading = document.getElementById('loading');
+    btn.disabled = true;
+    loading.style.display = 'block';
+    document.getElementById('errorMsg').style.display = 'none';
+
+    try {
+      const fd = new FormData();
+      fd.append('toolCard', toolInputEl.files[0]);
+      const slip = document.getElementById('slipInput').files[0];
+      if (slip) fd.append('slip', slip);
+      const label = document.getElementById('labelInput').value.trim();
+      if (label) fd.append('label', label);
+      const style = document.querySelector('.style-btn.active')?.dataset.style || '';
+      if (style) fd.append('style', style);
+
+      const data = await fetch('/generate', { method: 'POST', body: fd }).then(r => r.json());
+      if (data.error) throw new Error(data.error);
+
+      // Store market info for Winners tracking (extracted silently from slip)
+      generatedMarketTitle = data.marketTitle || null;
+      generatedEntryPrice  = data.entryPrice  || null;
+      generatedConditionId = data.conditionId || null;
+
+      // Fill tweets
+      const ta1 = document.getElementById('tweet1');
+      const ta2 = document.getElementById('tweet2');
+      ta1.value = data.tweet1;
+      ta2.value = data.tweet2;
+
+      // Set images inside tweet cards
+      if (slipDataUrl) {
+        document.getElementById('tweetImgSrc1').src = slipDataUrl;
+        document.getElementById('tweetImg1').classList.add('visible');
+      } else {
+        document.getElementById('tweetImg1').classList.remove('visible');
+      }
+      if (toolDataUrl) {
+        document.getElementById('tweetImgSrc2').src = toolDataUrl;
+        document.getElementById('tweetImg2').classList.add('visible');
+      } else {
+        document.getElementById('tweetImg2').classList.remove('visible');
+      }
+
+      // Show section & auto-resize
+      const section = document.getElementById('tweetSection');
+      section.style.display = 'block';
+      setTimeout(() => {
+        autoResizeAll();
+        section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 50);
+
+    } catch (err) {
+      document.getElementById('errorMsg').textContent = err.message;
+      document.getElementById('errorMsg').style.display = 'block';
+    } finally {
+      btn.disabled = false;
+      loading.style.display = 'none';
+    }
+  }
+
+  // ── Post Now ───────────────────────────────────────────────────────────────
+  async function postNow() {
+    if (!isConnected) { showToast('Connect your Twitter account first', 'error'); return; }
+    const tweet1 = document.getElementById('tweet1').value.trim();
+    const tweet2 = document.getElementById('tweet2').value.trim();
+    if (!tweet1 || !tweet2) { showToast('Both tweets are required', 'error'); return; }
+
+    const btn = document.getElementById('postNowBtn');
+    btn.disabled = true; btn.textContent = 'Posting...';
+    try {
+      const fd = new FormData();
+      fd.append('tweet1', tweet1);
+      fd.append('tweet2', tweet2);
+      if (generatedMarketTitle) fd.append('market_title', generatedMarketTitle);
+      if (generatedEntryPrice)  fd.append('entry_price',  generatedEntryPrice);
+      if (generatedConditionId) fd.append('condition_id', generatedConditionId);
+      const slipFile = document.getElementById('slipInput').files[0];
+      const toolFile = document.getElementById('toolInput').files[0];
+      if (slipFile) fd.append('slip', slipFile);
+      if (toolFile) fd.append('toolCard', toolFile);
+
+      const data = await fetch('/post/now', { method: 'POST', body: fd }).then(r => r.json());
+      if (data.error) throw new Error(data.error);
+      if (data.mediaErrors && data.mediaErrors.length > 0) {
+        showToast('Posted (images failed to attach)', 'error');
+        console.warn('Media upload errors:', data.mediaErrors);
+      } else {
+        showToast('Thread posted! 🎉', 'success');
+      }
+      // Transform button into "New Thread" to clear and start fresh
+      btn.disabled = false;
+      btn.textContent = '✨ New Thread';
+      btn.style.background = 'linear-gradient(135deg, #5fffb0 0%, #1d9bf0 100%)';
+      btn.onclick = function() {
+        clearAll();
+        btn.textContent = 'Post Now 𝕏';
+        btn.style.background = '';
+        btn.onclick = postNow;
+      };
+    } catch (err) {
+      showToast(err.message, 'error');
+      btn.disabled = false; btn.textContent = 'Post Now 𝕏';
+    }
+  }
+
+  function clearAll() {
+    // Clear text editors
+    document.getElementById('tweet1').value = '';
+    document.getElementById('tweet2').value = '';
+    document.getElementById('tweet1').style.height = 'auto';
+    document.getElementById('tweet2').style.height = 'auto';
+
+    // Clear file inputs and previews
+    document.getElementById('slipInput').value = '';
+    document.getElementById('toolInput').value = '';
+    document.getElementById('slipPreview').style.display = 'none';
+    document.getElementById('toolPreview').style.display = 'none';
+    document.getElementById('slipZone').querySelector('.upload-placeholder').style.display = '';
+    document.getElementById('toolZone').querySelector('.upload-placeholder').style.display = '';
+
+    // Clear generated metadata
+    generatedMarketTitle = null;
+    generatedEntryPrice  = null;
+    generatedConditionId = null;
+
+    // Update char counts
+    document.querySelectorAll('.char-count').forEach(el => el.textContent = '0 / 280');
+  }
+
+  // ── Queue ──────────────────────────────────────────────────────────────────
+  async function addToQueue() {
+    if (!isConnected) { showToast('Connect your Twitter account first', 'error'); return; }
+    const tweet1 = document.getElementById('tweet1').value.trim();
+    const tweet2 = document.getElementById('tweet2').value.trim();
+    if (!tweet1 || !tweet2) { showToast('Both tweets are required', 'error'); return; }
+
+    const btn = document.getElementById('queueBtn');
+    btn.disabled = true; btn.textContent = 'Adding...';
+    try {
+      const fd = new FormData();
+      fd.append('tweet1', tweet1);
+      fd.append('tweet2', tweet2);
+      if (generatedMarketTitle) fd.append('market_title', generatedMarketTitle);
+      if (generatedEntryPrice)  fd.append('entry_price',  generatedEntryPrice);
+      if (generatedConditionId) fd.append('condition_id', generatedConditionId);
+      const slipFile = document.getElementById('slipInput').files[0];
+      const toolFile = document.getElementById('toolInput').files[0];
+      if (slipFile) fd.append('slip', slipFile);
+      if (toolFile) fd.append('toolCard', toolFile);
+
+      const data = await fetch('/queue/add', {
+        method: 'POST',
+        body: fd
+      }).then(r => r.json());
+      if (data.error) throw new Error(data.error);
+
+      const t = new Date(data.scheduledAt);
+      showToast(`Queued for ${t.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`, 'success');
+      loadQueue();
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      btn.disabled = false; btn.textContent = 'Add to Queue';
+    }
+  }
+
+  async function loadQueue() {
+    const items = await fetch('/queue').then(r => r.json());
+    const el    = document.getElementById('queueList');
+    const panel = document.getElementById('queuePanel');
+    panel.style.display = 'block';
+
+    if (!items.length) {
+      el.innerHTML = '<div class="queue-empty">Queue is empty</div>';
+      return;
+    }
+
+    el.innerHTML = items.map(item => {
+      const t = new Date(item.scheduled_at);
+      const timeStr = t.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' at ' +
+                      t.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const isFailed = item.status === 'failed';
+
+      // Show image badge if images attached
+      let imageBadge = '';
+      if (item.slip_path || item.tool_path) {
+        imageBadge = '<span class="queue-image-badge">📸 Image</span>';
+      }
+
+      // Show QT badge if quote tweet
+      let qtBadge = '';
+      if (item.is_quote_tweet) {
+        qtBadge = '<span class="queue-image-badge">QT</span>';
+      }
+
+      const badges = imageBadge + qtBadge;
+
+      return `
+        <div class="queue-item">
+          <div class="queue-item-header">
+            <div class="queue-time">${timeStr}</div>
+            <div class="queue-badges">
+              ${badges}
+              <div class="queue-status ${isFailed ? 'failed' : ''}">${isFailed ? '✕ ' + (item.error || 'failed') : 'Pending'}</div>
+            </div>
+          </div>
+          <div class="queue-tweet-preview">${escHtml(item.tweet1)}</div>
+          <div class="queue-actions">
+            <button class="queue-action-btn" onclick="openEdit(${item.id})">Edit</button>
+            <button class="queue-action-btn cancel" onclick="cancelItem(${item.id})">Remove</button>
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  async function cancelItem(id) {
+    await fetch(`/queue/${id}`, { method: 'DELETE' });
+    showToast('Removed from queue', 'success');
+    loadQueue();
+  }
+
+  // ── Edit modal ─────────────────────────────────────────────────────────────
+  let editingId = null;
+  async function openEdit(id) {
+    const items = await fetch('/queue').then(r => r.json());
+    const item = items.find(i => i.id === id);
+    if (!item) return;
+    editingId = id;
+    document.getElementById('modalTweet1').value = item.tweet1;
+    document.getElementById('modalTweet2').value = item.tweet2;
+    document.getElementById('editModal').classList.add('open');
+  }
+  function closeModal() {
+    document.getElementById('editModal').classList.remove('open');
+    editingId = null;
+  }
+  async function saveModal() {
+    if (!editingId) return;
+    const tweet1 = document.getElementById('modalTweet1').value.trim();
+    const tweet2 = document.getElementById('modalTweet2').value.trim();
+    await fetch(`/queue/${editingId}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tweet1, tweet2 })
+    });
+    closeModal();
+    showToast('Saved', 'success');
+    loadQueue();
+  }
+
+  // ── Utility ────────────────────────────────────────────────────────────────
+  function escHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  // ── Affiliate QT ──────────────────────────────────────────────────────────────
+  let affFeedData = [];
+  let affFilter = 'all';
+  let affCurrentTweet = null;
+
+  function setAffFilter(cat) {
+    affFilter = cat;
+    document.querySelectorAll('.aff-filter').forEach(b => b.classList.toggle('active', b.dataset.cat === cat));
+    renderAffFeed();
+  }
+
+  async function loadOjFeed(force) {
+    const el = document.getElementById('affFeedList');
+    el.innerHTML = '<div class="winners-empty"><span class="spinner"></span> Loading @OddsJam feed...</div>';
+    try {
+      const url = force ? '/api/oddsjam-feed?force=1' : '/api/oddsjam-feed';
+      const data = await fetch(url).then(r => r.json());
+      if (data.error) throw new Error(data.error);
+      affFeedData = data.tweets || [];
+      renderAffFeed();
+      if (force) showToast(`Loaded ${affFeedData.length} tweets`, 'success');
+    } catch (err) {
+      el.innerHTML = `<div class="winners-empty">Error: ${escHtml(err.message)}</div>`;
+    }
+  }
+
+  function renderAffFeed() {
+    const el = document.getElementById('affFeedList');
+    const sort = document.getElementById('affSortSelect').value;
+
+    let filtered = affFeedData;
+    if (affFilter === 'top') {
+      // Top engagement: show top 20 by engagement regardless of category
+      filtered = [...affFeedData].sort((a, b) => b.engagement - a.engagement).slice(0, 20);
+    } else if (affFilter !== 'all') {
+      filtered = affFeedData.filter(t => t.categories.includes(affFilter));
+    }
+
+    // Apply sort
+    if (sort === 'engagement') {
+      filtered = [...filtered].sort((a, b) => b.engagement - a.engagement);
+    } else if (sort === 'recent') {
+      filtered = [...filtered].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    } else if (sort === 'oldest') {
+      filtered = [...filtered].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+    }
+
+    if (!filtered.length) {
+      el.innerHTML = `<div class="winners-empty">No tweets found for this filter. Try refreshing or changing the category.</div>`;
+      return;
+    }
+
+    const catColors = { profit: '💰', arbitrage: '🔒', thread: '🧵', affiliate: '📢', general: '' };
+    const catLabels = { profit: 'Profit', arbitrage: 'Arb', thread: 'Thread', affiliate: 'Affiliate', general: 'General' };
+
+    el.innerHTML = filtered.map((t, idx) => {
+      const time = new Date(t.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const date = new Date(t.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' });
+      const m = t.metrics;
+      const cats = t.categories.map(c =>
+        `<span class="aff-cat-badge ${c}">${catColors[c] || ''} ${catLabels[c] || c}</span>`
+      ).join('');
+
+      // Clean up RT prefix for display — strip "RT @username: " from the beginning
+      let cleanText = t.text;
+      if (t.is_retweet) {
+        cleanText = cleanText.replace(/^RT @\w+:\s*/, '');
+      }
+      const displayText = cleanText.length > 400 ? cleanText.slice(0, 400) + '...' : cleanText;
+
+      // Author badge for RTs
+      const authorBadge = t.rt_author
+        ? `<span style="font-size:11px;color:rgba(255,255,255,0.35);font-weight:600;">@${escHtml(t.rt_author)}</span>`
+        : '';
+
+      // Media thumbnails
+      let mediaHtml = '';
+      if (t.media && t.media.length) {
+        const imgs = t.media.filter(m => m.url || m.preview_url).map(m =>
+          `<img src="${escHtml(m.preview_url || m.url)}" alt="" class="aff-tweet-img" loading="lazy" />`
+        ).join('');
+        if (imgs) mediaHtml = `<div class="aff-tweet-media">${imgs}</div>`;
+      }
+
+      // Link to original tweet if RT, otherwise to the OddsJam tweet
+      const viewUrl = t.original_tweet_id
+        ? `https://x.com/i/status/${t.original_tweet_id}`
+        : `https://x.com/OddsJam/status/${t.id}`;
+
+      return `
+        <div class="aff-tweet-card">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+            <div class="aff-tweet-cats" style="margin-bottom:0;">${cats}</div>
+            ${authorBadge}
+          </div>
+          <div class="aff-tweet-text">${escHtml(displayText)}</div>
+          ${mediaHtml}
+          <div class="aff-tweet-meta">
+            <span>${date} ${time}</span>
+            <span>❤️ ${m.like_count || 0}</span>
+            <span>🔁 ${m.retweet_count || 0}</span>
+            <span>💬 ${m.reply_count || 0}</span>
+            ${m.impression_count ? `<span>👁 ${m.impression_count.toLocaleString()}</span>` : ''}
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <button class="aff-qt-btn" onclick="openAffQtModal(${idx})">✍️ Quote Tweet</button>
+            <a href="${viewUrl}" target="_blank" rel="noopener" style="font-size:11px;color:rgba(255,255,255,0.3);text-decoration:none;">View on X ↗</a>
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  function openAffQtModal(idx) {
+    // Get the current filtered+sorted list to match the index
+    const sort = document.getElementById('affSortSelect').value;
+    let filtered = affFeedData;
+    if (affFilter === 'top') {
+      filtered = [...affFeedData].sort((a, b) => b.engagement - a.engagement).slice(0, 20);
+    } else if (affFilter !== 'all') {
+      filtered = affFeedData.filter(t => t.categories.includes(affFilter));
+    }
+    if (sort === 'engagement') filtered = [...filtered].sort((a, b) => b.engagement - a.engagement);
+    else if (sort === 'recent') filtered = [...filtered].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    else if (sort === 'oldest') filtered = [...filtered].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+
+    const tweet = filtered[idx];
+    if (!tweet) return;
+    affCurrentTweet = tweet;
+
+    document.getElementById('affQtOriginal').textContent = tweet.text;
+    const qtId = tweet.original_tweet_id || tweet.id;
+    document.getElementById('affQtCategory').textContent = `Categories: ${tweet.categories.join(', ')}`;
+    document.getElementById('affQtText').value = '';
+    document.getElementById('affAiSuggestions').style.display = 'none';
+    document.getElementById('affAiSuggestionsList').innerHTML = '';
+    document.getElementById('affQtModalBg').classList.add('open');
+
+    // Load past QT suggestions
+    loadAffQtSuggestions(tweet.categories[0]);
+  }
+
+  function closeAffQtModal() {
+    document.getElementById('affQtModalBg').classList.remove('open');
+    affCurrentTweet = null;
+  }
+
+  async function loadAffQtSuggestions(category) {
+    const container = document.getElementById('affQtSuggestions');
+    const list = document.getElementById('affQtSuggestionsList');
+    try {
+      const rows = await fetch(`/api/qt-suggestions?category=${category || 'all'}`).then(r => r.json());
+      if (rows.length) {
+        list.innerHTML = rows.map(r =>
+          `<button class="aff-suggestion-btn" onclick="document.getElementById('affQtText').value=this.textContent">${escHtml(r.qt_text)}</button>`
+        ).join('');
+        container.style.display = 'block';
+      } else {
+        container.style.display = 'none';
+      }
+    } catch {
+      container.style.display = 'none';
+    }
+  }
+
+  async function queueAffQT() {
+    if (!affCurrentTweet) return;
+    const qtText = document.getElementById('affQtText').value.trim();
+    if (!qtText) { showToast('Write your QT text first', 'error'); return; }
+    if (!isConnected) { showToast('Connect Twitter first', 'error'); return; }
+
+    const btn = document.getElementById('affQtQueueBtn');
+    btn.disabled = true; btn.textContent = 'Adding...';
+    try {
+      // Queue the QT with affiliate scheduling (7-9AM / 7-10PM CT, ~1hr apart)
+      const data = await fetch('/queue/add-qt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tweet1: qtText,
+          quote_tweet_id: affCurrentTweet.original_tweet_id || affCurrentTweet.id,
+          affiliate_schedule: true
+        })
+      }).then(r => r.json());
+      if (data.error) throw new Error(data.error);
+
+      // Log for suggestion database
+      fetch('/api/qt-log', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          original_tweet_id: affCurrentTweet.id,
+          original_text: affCurrentTweet.text,
+          qt_text: qtText,
+          category: affCurrentTweet.categories[0] || null
+        })
+      }).catch(() => {}); // fire-and-forget
+
+      const schedTime = new Date(data.scheduledAt);
+      const timeStr = schedTime.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZoneName: 'short' });
+      showToast(`QT queued for ${timeStr}`, 'success');
+      closeAffQtModal();
+      switchTab('generate');
+      loadQueue();
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      btn.disabled = false; btn.textContent = 'Add to Queue';
+    }
+  }
+
+  async function postAffQTNow() {
+    if (!affCurrentTweet) return;
+    const qtText = document.getElementById('affQtText').value.trim();
+    if (!qtText) { showToast('Write your QT text first', 'error'); return; }
+    if (!isConnected) { showToast('Connect Twitter first', 'error'); return; }
+
+    const btn = document.getElementById('affQtPostBtn');
+    btn.disabled = true; btn.textContent = 'Posting...';
+    try {
+      const data = await fetch('/post/qt-now', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tweet1: qtText,
+          quote_tweet_id: affCurrentTweet.original_tweet_id || affCurrentTweet.id
+        })
+      }).then(r => r.json());
+      if (data.error) throw new Error(data.error);
+
+      // Log for suggestion database
+      fetch('/api/qt-log', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          original_tweet_id: affCurrentTweet.id,
+          original_text: affCurrentTweet.text,
+          qt_text: qtText,
+          category: affCurrentTweet.categories[0] || null
+        })
+      }).catch(() => {});
+
+      showToast('Quote tweet posted!', 'success');
+      closeAffQtModal();
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      btn.disabled = false; btn.textContent = 'Post Now 𝕏';
+    }
+  }
+
+  // ── Emoji picker ─────────────────────────────────────────────────────────
+  const EMOJI_DATA = [
+    { label: 'Sports', emojis: ['🏀','⚾','🏈','⚽','🏒','🎾','🏐','🥊','🏆','🥇','🏅','🎯'] },
+    { label: 'Money', emojis: ['💰','💵','💸','🤑','📈','📉','💎','🏦','💳','🪙','📊','🔥'] },
+    { label: 'Hands', emojis: ['👆','👇','👉','👈','🤝','👏','🙌','💪','✊','🫡','👊','🤞'] },
+    { label: 'Reactions', emojis: ['🔥','💣','🚀','⚡','✅','❌','⚠️','💡','👀','🧠','😤','🫣'] },
+    { label: 'Objects', emojis: ['🧵','📌','📍','🔗','🔒','🔓','📝','🗒️','📱','💻','🎬','📸'] },
+    { label: 'Symbols', emojis: ['➡️','⬆️','⬇️','↗️','↘️','🔄','▶️','⏰','🕐','🔔','💯','‼️'] },
+    { label: 'Faces', emojis: ['😀','😂','🤣','😎','🤔','😱','🥶','🥵','😈','💀','🤡','👑'] }
+  ];
+
+  let activeEmojiPicker = null;
+  let activeEmojiTarget = null;
+
+  function toggleEmojiPicker(event, targetId) {
+    event.stopPropagation();
+    const btn = event.currentTarget;
+    const wrapper = btn.parentElement;
+
+    // Close existing picker
+    if (activeEmojiPicker) {
+      activeEmojiPicker.remove();
+      if (activeEmojiTarget === targetId) { activeEmojiPicker = null; activeEmojiTarget = null; return; }
+    }
+
+    activeEmojiTarget = targetId;
+
+    // Create picker
+    const picker = document.createElement('div');
+    picker.className = 'emoji-picker open';
+    picker.onclick = e => e.stopPropagation();
+
+    // Search
+    const search = document.createElement('input');
+    search.className = 'emoji-picker-search';
+    search.placeholder = 'Search emojis...';
+    search.type = 'text';
+    picker.appendChild(search);
+
+    // Grid
+    const grid = document.createElement('div');
+    grid.className = 'emoji-picker-grid';
+
+    function renderGrid(filter) {
+      grid.innerHTML = '';
+      const f = (filter || '').toLowerCase();
+      EMOJI_DATA.forEach(section => {
+        const filtered = f ? section.emojis.filter(e => section.label.toLowerCase().includes(f)) : section.emojis;
+        if (!filtered.length) return;
+        const label = document.createElement('div');
+        label.className = 'emoji-section-label';
+        label.textContent = section.label;
+        grid.appendChild(label);
+        filtered.forEach(emoji => {
+          const span = document.createElement('span');
+          span.className = 'emoji-pick';
+          span.textContent = emoji;
+          span.onclick = () => insertEmoji(targetId, emoji);
+          grid.appendChild(span);
+        });
+      });
+    }
+
+    renderGrid();
+    search.oninput = () => renderGrid(search.value);
+    picker.appendChild(grid);
+    wrapper.appendChild(picker);
+    activeEmojiPicker = picker;
+    search.focus();
+  }
+
+  function insertEmoji(targetId, emoji) {
+    const ta = document.getElementById(targetId);
+    if (!ta) return;
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+    ta.value = ta.value.slice(0, start) + emoji + ta.value.slice(end);
+    ta.selectionStart = ta.selectionEnd = start + emoji.length;
+    ta.focus();
+    if (typeof autoResize === 'function') autoResize(ta);
+  }
+
+  // Close picker when clicking outside
+  document.addEventListener('click', () => {
+    if (activeEmojiPicker) {
+      activeEmojiPicker.remove();
+      activeEmojiPicker = null;
+      activeEmojiTarget = null;
+    }
+  });
+
+  // ── Streamer Tab ─────────────────────────────────────────────────────────
+  let streamerFeedQtTarget = null; // { tweet1_id, text }
+
+  function setStreamerMode(mode) {
+    document.getElementById('streamerThreadForm').style.display = mode === 'thread' ? '' : 'none';
+    document.getElementById('streamerQtForm').style.display = mode === 'qt' ? '' : 'none';
+    document.getElementById('streamerModeThread').classList.toggle('active', mode === 'thread');
+    document.getElementById('streamerModeQt').classList.toggle('active', mode === 'qt');
+  }
+
+  function previewStreamerImg(num) {
+    const input = document.getElementById('streamerImg' + num);
+    const preview = document.getElementById('streamerImg' + num + 'Preview');
+    const clearBtn = document.getElementById('streamerImg' + num + 'Clear');
+    if (input.files[0]) {
+      preview.textContent = input.files[0].name;
+      clearBtn.style.display = 'inline';
+    }
+  }
+
+  function clearStreamerImg(num) {
+    document.getElementById('streamerImg' + num).value = '';
+    document.getElementById('streamerImg' + num + 'Preview').textContent = '';
+    document.getElementById('streamerImg' + num + 'Clear').style.display = 'none';
+  }
+
+  function previewStreamerQtImg() {
+    const input = document.getElementById('streamerQtImg');
+    const preview = document.getElementById('streamerQtImgPreview');
+    const clearBtn = document.getElementById('streamerQtImgClear');
+    if (input.files[0]) {
+      preview.textContent = input.files[0].name;
+      clearBtn.style.display = 'inline';
+    }
+  }
+
+  function clearStreamerQtImg() {
+    document.getElementById('streamerQtImg').value = '';
+    document.getElementById('streamerQtImgPreview').textContent = '';
+    document.getElementById('streamerQtImgClear').style.display = 'none';
+  }
+
+  async function streamerPostThread() {
+    const tweet1 = document.getElementById('streamerTweet1').value.trim();
+    const tweet2 = document.getElementById('streamerTweet2').value.trim();
+    if (!tweet1 || !tweet2) { showToast('Both tweets are required', 'error'); return; }
+    if (!isConnected) { showToast('Connect Twitter first', 'error'); return; }
+
+    const btn = document.getElementById('streamerPostThreadBtn');
+    btn.disabled = true; btn.textContent = 'Posting...';
+
+    try {
+      const fd = new FormData();
+      fd.append('tweet1', tweet1);
+      fd.append('tweet2', tweet2);
+      const img1 = document.getElementById('streamerImg1').files[0];
+      const img2 = document.getElementById('streamerImg2').files[0];
+      if (img1) fd.append('image1', img1);
+      if (img2) fd.append('image2', img2);
+
+      const data = await fetch('/streamer/post-thread', { method: 'POST', body: fd }).then(r => r.json());
+      if (data.error) throw new Error(data.error);
+
+      showToast('Thread posted!', 'success');
+      document.getElementById('streamerTweet1').value = '';
+      document.getElementById('streamerTweet2').value = '';
+      clearStreamerImg(1);
+      clearStreamerImg(2);
+      loadStreamerFeed();
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      btn.disabled = false; btn.textContent = 'Post Thread 𝕏';
+    }
+  }
+
+  async function streamerPostQt() {
+    const qtText = document.getElementById('streamerQtText').value.trim();
+    const qtUrl = document.getElementById('streamerQtUrl').value.trim();
+    if (!qtText) { showToast('Write your quote tweet text', 'error'); return; }
+    if (!qtUrl) { showToast('Paste the tweet URL to quote', 'error'); return; }
+    if (!isConnected) { showToast('Connect Twitter first', 'error'); return; }
+
+    const btn = document.getElementById('streamerPostQtBtn');
+    btn.disabled = true; btn.textContent = 'Posting...';
+
+    try {
+      const fd = new FormData();
+      fd.append('tweet1', qtText);
+      fd.append('quote_tweet_url', qtUrl);
+      const img = document.getElementById('streamerQtImg').files[0];
+      if (img) fd.append('image1', img);
+
+      const data = await fetch('/streamer/post-qt', { method: 'POST', body: fd }).then(r => r.json());
+      if (data.error) throw new Error(data.error);
+
+      showToast('Quote tweet posted!', 'success');
+      document.getElementById('streamerQtText').value = '';
+      document.getElementById('streamerQtUrl').value = '';
+      clearStreamerQtImg();
+      loadStreamerFeed();
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      btn.disabled = false; btn.textContent = 'Post Quote Tweet 𝕏';
+    }
+  }
+
+  // Store feed data for the modal
+  let streamerFeedData = [];
+
+  async function loadStreamerFeed() {
+    const container = document.getElementById('streamerFeed');
+    try {
+      const data = await fetch('/streamer/feed').then(r => r.json());
+      streamerFeedData = data.posts || [];
+      if (streamerFeedData.length === 0) {
+        container.innerHTML = '<div style="color:rgba(255,255,255,0.3);font-size:12px;">No posts yet. Post your first thread above!</div>';
+        return;
+      }
+
+      container.innerHTML = streamerFeedData.map((p, idx) => {
+        const date = new Date(p.posted_at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+        const isQt = p.is_quote_tweet;
+        const typeLabel = isQt ? 'QT' : 'Thread';
+        const typeColor = isQt ? '#a855f7' : '#3b82f6';
+        const viewUrl = p.tweet1_id ? `https://x.com/i/status/${p.tweet1_id}` : '#';
+
+        let content = `<div style="font-size:13px;color:rgba(255,255,255,0.75);line-height:1.5;margin-bottom:6px;white-space:pre-wrap;">${escHtml(p.tweet1)}</div>`;
+        if (p.tweet2) {
+          content += `<div style="font-size:12px;color:rgba(255,255,255,0.5);line-height:1.4;border-left:2px solid rgba(255,255,255,0.1);padding-left:10px;margin-bottom:6px;white-space:pre-wrap;">${escHtml(p.tweet2)}</div>`;
+        }
+        if (isQt && p.quote_tweet_id) {
+          content += `<div style="font-size:10px;color:rgba(255,255,255,0.25);margin-bottom:6px;">Quoted: x.com/i/status/${p.quote_tweet_id}</div>`;
+        }
+
+        return `<div style="padding:12px;background:rgba(0,0,0,0.2);border-radius:10px;border:1px solid rgba(255,255,255,0.04);">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <span style="font-size:9px;font-weight:700;padding:2px 8px;border-radius:4px;background:${typeColor}22;color:${typeColor};text-transform:uppercase;">${typeLabel}</span>
+            <span style="font-size:10px;color:rgba(255,255,255,0.3);">${date}</span>
+          </div>
+          ${content}
+          <div style="display:flex;gap:8px;align-items:center;">
+            ${p.tweet1_id ? `<button class="aff-qt-btn" onclick="openStreamerFeedQtModal(${idx})" style="font-size:11px;">✍️ Quote Tweet</button>` : ''}
+            <a href="${viewUrl}" target="_blank" rel="noopener" style="font-size:10px;color:rgba(255,255,255,0.3);text-decoration:none;">View on X ↗</a>
+          </div>
+        </div>`;
+      }).join('');
+    } catch (err) {
+      container.innerHTML = `<div style="color:#ef4444;font-size:12px;">Failed to load: ${err.message}</div>`;
+    }
+  }
+
+  function openStreamerFeedQtModal(idx) {
+    const post = streamerFeedData[idx];
+    if (!post || !post.tweet1_id) return;
+    streamerFeedQtTarget = post;
+    document.getElementById('streamerFeedQtOriginal').textContent = post.tweet1 + (post.tweet2 ? '\n\n' + post.tweet2 : '');
+    document.getElementById('streamerFeedQtText').value = '';
+    document.getElementById('streamerFeedQtModalBg').classList.add('open');
+  }
+
+  function closeStreamerFeedQtModal() {
+    document.getElementById('streamerFeedQtModalBg').classList.remove('open');
+    streamerFeedQtTarget = null;
+  }
+
+  async function streamerPostFeedQt() {
+    if (!streamerFeedQtTarget) return;
+    const qtText = document.getElementById('streamerFeedQtText').value.trim();
+    if (!qtText) { showToast('Write your quote tweet text', 'error'); return; }
+    if (!isConnected) { showToast('Connect Twitter first', 'error'); return; }
+
+    const btn = document.getElementById('streamerFeedQtPostBtn');
+    btn.disabled = true; btn.textContent = 'Posting...';
+
+    try {
+      const fd = new FormData();
+      fd.append('tweet1', qtText);
+      fd.append('quote_tweet_id', streamerFeedQtTarget.tweet1_id);
+      const img = document.getElementById('streamerFeedQtImg').files[0];
+      if (img) fd.append('image1', img);
+
+      const data = await fetch('/streamer/post-qt', { method: 'POST', body: fd }).then(r => r.json());
+      if (data.error) throw new Error(data.error);
+
+      showToast('Quote tweet posted!', 'success');
+      closeStreamerFeedQtModal();
+      loadStreamerFeed();
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      btn.disabled = false; btn.textContent = 'Post Quote Tweet 𝕏';
+    }
+  }
+
+  // ── AI QT Suggestions ────────────────────────────────────────────────────
+  async function generateAiQtSuggestions() {
+    if (!affCurrentTweet) return;
+    const btn = document.getElementById('affAiSuggestBtn');
+    const container = document.getElementById('affAiSuggestions');
+    const list = document.getElementById('affAiSuggestionsList');
+
+    btn.disabled = true;
+    btn.textContent = 'Thinking...';
+    btn.style.opacity = '0.6';
+
+    try {
+      const res = await fetch('/api/qt-suggest-ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          original_text: affCurrentTweet.text,
+          category: affCurrentTweet.categories[0] || 'general',
+          rt_author: affCurrentTweet.rt_author
+        })
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+
+      if (data.suggestions && data.suggestions.length) {
+        list.innerHTML = data.suggestions.map(s =>
+          `<button class="aff-suggestion-btn" onclick="document.getElementById('affQtText').value=this.textContent" style="text-align:left;padding:8px 10px;background:rgba(124,58,237,0.12);border:1px solid rgba(124,58,237,0.25);border-radius:6px;color:rgba(255,255,255,0.8);font-size:12px;cursor:pointer;line-height:1.4;">${escHtml(s)}</button>`
+        ).join('');
+        container.style.display = 'block';
+      }
+    } catch (err) {
+      showToast('AI suggest failed: ' + err.message, 'error');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'AI Suggest';
+      btn.style.opacity = '1';
+    }
+  }
+
+  // ── Analytics ───────────────────────────────────────────────────────────────
+  function fmtNum(n) {
+    if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+    if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
+    return n.toString();
+  }
+
+  async function loadAnalytics() {
+    const days = document.getElementById('analyticsRange').value;
+    try {
+      const data = await fetch(`/api/analytics?days=${days}`).then(r => r.json());
+      if (data.error) throw new Error(data.error);
+
+      const s = data.summary;
+      document.getElementById('statTotalPosts').textContent = s.total_posts;
+      document.getElementById('statPiTweets').textContent = s.pi_tweets;
+      document.getElementById('statAffQTs').textContent = s.affiliate_qts;
+      document.getElementById('statImpressions').textContent = fmtNum(s.total_impressions);
+      document.getElementById('statLikes').textContent = fmtNum(s.total_likes);
+      document.getElementById('statRetweets').textContent = fmtNum(s.total_retweets);
+
+      // Daily chart
+      const chartEl = document.getElementById('analyticsDailyChart');
+      if (data.daily.length === 0) {
+        chartEl.innerHTML = '<div style="width:100%;text-align:center;color:rgba(255,255,255,0.3);font-size:12px;align-self:center;">No posts in this period</div>';
+      } else {
+        const maxVal = Math.max(...data.daily.map(d => d.total), 1);
+        chartEl.innerHTML = data.daily.map(d => {
+          const piH = Math.max((d.pi / maxVal) * 100, d.pi > 0 ? 4 : 0);
+          const affH = Math.max((d.affiliate / maxVal) * 100, d.affiliate > 0 ? 4 : 0);
+          const dateLabel = new Date(d.date + 'T12:00:00').toLocaleDateString([], { month: 'short', day: 'numeric' });
+          return `<div style="flex:1;min-width:20px;max-width:40px;display:flex;flex-direction:column;align-items:center;gap:1px;" title="${dateLabel}: ${d.pi} PI, ${d.affiliate} Aff">
+            <div style="width:100%;display:flex;flex-direction:column;gap:1px;">
+              <div style="width:100%;height:${affH}px;background:#a855f7;border-radius:2px 2px 0 0;"></div>
+              <div style="width:100%;height:${piH}px;background:#3b82f6;border-radius:0 0 2px 2px;"></div>
+            </div>
+            <div style="font-size:8px;color:rgba(255,255,255,0.3);transform:rotate(-45deg);white-space:nowrap;margin-top:4px;">${dateLabel}</div>
+          </div>`;
+        }).join('');
+      }
+
+      // Top performers
+      const topEl = document.getElementById('analyticsTopPerformers');
+      if (data.top_performers.length === 0) {
+        topEl.innerHTML = '<div style="color:rgba(255,255,255,0.3);font-size:12px;">No posted tweets with metrics yet</div>';
+      } else {
+        topEl.innerHTML = data.top_performers.map((t, i) => {
+          const typeColor = t.type === 'affiliate_qt' ? '#a855f7' : '#3b82f6';
+          const typeLabel = t.type === 'affiliate_qt' ? 'QT' : 'PI';
+          const date = new Date(t.posted_at).toLocaleDateString([], { month: 'short', day: 'numeric' });
+          const tweetUrl = t.tweet1_id ? `https://x.com/i/status/${t.tweet1_id}` : '#';
+          return `<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:rgba(0,0,0,0.2);border-radius:8px;">
+            <span style="font-size:14px;font-weight:800;color:rgba(255,255,255,0.2);min-width:20px;">${i + 1}</span>
+            <span style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;background:${typeColor}22;color:${typeColor};text-transform:uppercase;">${typeLabel}</span>
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:12px;color:rgba(255,255,255,0.7);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escHtml(t.text)}</div>
+              <div style="font-size:10px;color:rgba(255,255,255,0.3);margin-top:2px;">${date}${t.market_title ? ' · ' + escHtml(t.market_title) : ''}</div>
+            </div>
+            <div style="display:flex;gap:8px;font-size:10px;color:rgba(255,255,255,0.4);white-space:nowrap;">
+              <span title="Impressions">👁 ${fmtNum(t.impressions)}</span>
+              <span title="Likes">❤ ${fmtNum(t.likes)}</span>
+              <span title="Retweets">🔁 ${fmtNum(t.retweets)}</span>
+            </div>
+            <a href="${tweetUrl}" target="_blank" rel="noopener" style="font-size:10px;color:rgba(255,255,255,0.2);text-decoration:none;">↗</a>
+          </div>`;
+        }).join('');
+      }
+    } catch (err) {
+      showToast('Analytics load failed: ' + err.message, 'error');
+    }
+  }
+
+  // ── Init ───────────────────────────────────────────────────────────────────
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('connected')) { showToast('Twitter connected! 🎉', 'success'); history.replaceState({}, '', '/'); }
+  if (params.get('error'))     { showToast(decodeURIComponent(params.get('error')), 'error'); history.replaceState({}, '', '/'); }
+
+  checkAuth();
+  loadQueue();
+  setInterval(loadQueue, 60_000);
+</script>
+</body>
+</html>
