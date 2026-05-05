@@ -909,6 +909,7 @@
   <button class="tab-btn active" id="tabBtnGenerate" onclick="switchTab('generate')">⚡ Generate</button>
   <button class="tab-btn" id="tabBtnWinners" onclick="switchTab('winners')">🏆 Winners</button>
   <button class="tab-btn" id="tabBtnAffiliate" onclick="switchTab('affiliate')">📡 Affiliate QT</button>
+  <button class="tab-btn" id="tabBtnStreamer" onclick="switchTab('streamer')">🎙 Streamer</button>
   <button class="tab-btn" id="tabBtnAnalytics" onclick="switchTab('analytics')">📊 Analytics</button>
 </div>
 
@@ -1128,6 +1129,102 @@
 </div>
 </div><!-- end tabAffiliate -->
 
+<!-- Streamer Tab -->
+<div id="tabStreamer" class="glass card" style="display:none;">
+  <h2 style="margin-bottom:16px;font-size:18px;">Streamer Post Tool</h2>
+
+  <!-- Mode toggle: Thread vs Quote Tweet -->
+  <div style="display:flex;gap:8px;margin-bottom:16px;">
+    <button id="streamerModeThread" class="tab-btn active" onclick="setStreamerMode('thread')" style="flex:1;padding:8px;border-radius:8px;font-size:12px;font-weight:600;">New Thread</button>
+    <button id="streamerModeQt" class="tab-btn" onclick="setStreamerMode('qt')" style="flex:1;padding:8px;border-radius:8px;font-size:12px;font-weight:600;">Quote Tweet</button>
+  </div>
+
+  <!-- Thread Composer -->
+  <div id="streamerThreadForm">
+    <div style="margin-bottom:12px;">
+      <label style="font-size:12px;color:rgba(255,255,255,0.5);font-weight:600;display:block;margin-bottom:4px;">TWEET 1</label>
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;"><span style="position:relative;"><button class="emoji-btn" onclick="toggleEmojiPicker(event,'streamerTweet1')">😀</button></span></div>
+      <textarea id="streamerTweet1" class="tweet-textarea" rows="4" placeholder="First tweet..." style="width:100%;"></textarea>
+      <div style="margin-top:6px;">
+        <label style="font-size:11px;color:rgba(255,255,255,0.4);cursor:pointer;display:inline-flex;align-items:center;gap:4px;">
+          <input type="file" id="streamerImg1" accept="image/*" style="display:none;" onchange="previewStreamerImg(1)">
+          📎 Add image
+        </label>
+        <span id="streamerImg1Preview" style="font-size:11px;color:rgba(255,255,255,0.3);margin-left:8px;"></span>
+        <button id="streamerImg1Clear" onclick="clearStreamerImg(1)" style="display:none;background:none;border:none;color:#ef4444;font-size:11px;cursor:pointer;margin-left:4px;">✕ Remove</button>
+      </div>
+    </div>
+
+    <div style="margin-bottom:16px;">
+      <label style="font-size:12px;color:rgba(255,255,255,0.5);font-weight:600;display:block;margin-bottom:4px;">TWEET 2</label>
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;"><span style="position:relative;"><button class="emoji-btn" onclick="toggleEmojiPicker(event,'streamerTweet2')">😀</button></span></div>
+      <textarea id="streamerTweet2" class="tweet-textarea" rows="4" placeholder="Second tweet (reply)..." style="width:100%;"></textarea>
+      <div style="margin-top:6px;">
+        <label style="font-size:11px;color:rgba(255,255,255,0.4);cursor:pointer;display:inline-flex;align-items:center;gap:4px;">
+          <input type="file" id="streamerImg2" accept="image/*" style="display:none;" onchange="previewStreamerImg(2)">
+          📎 Add image
+        </label>
+        <span id="streamerImg2Preview" style="font-size:11px;color:rgba(255,255,255,0.3);margin-left:8px;"></span>
+        <button id="streamerImg2Clear" onclick="clearStreamerImg(2)" style="display:none;background:none;border:none;color:#ef4444;font-size:11px;cursor:pointer;margin-left:4px;">✕ Remove</button>
+      </div>
+    </div>
+
+    <button id="streamerPostThreadBtn" class="post-btn" onclick="streamerPostThread()" style="width:100%;padding:12px;font-size:14px;">Post Thread 𝕏</button>
+  </div>
+
+  <!-- Quote Tweet Composer -->
+  <div id="streamerQtForm" style="display:none;">
+    <div style="margin-bottom:12px;">
+      <label style="font-size:12px;color:rgba(255,255,255,0.5);font-weight:600;display:block;margin-bottom:4px;">TWEET URL TO QUOTE</label>
+      <input id="streamerQtUrl" type="text" placeholder="Paste tweet URL (https://x.com/user/status/...)" style="width:100%;background:rgba(255,255,255,0.06);color:#fff;border:1px solid rgba(255,255,255,0.1);padding:10px 12px;border-radius:8px;font-size:13px;box-sizing:border-box;">
+    </div>
+
+    <div style="margin-bottom:12px;">
+      <label style="font-size:12px;color:rgba(255,255,255,0.5);font-weight:600;display:block;margin-bottom:4px;">YOUR QUOTE TWEET</label>
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;"><span style="position:relative;"><button class="emoji-btn" onclick="toggleEmojiPicker(event,'streamerQtText')">😀</button></span></div>
+      <textarea id="streamerQtText" class="tweet-textarea" rows="4" placeholder="Write your quote tweet..." style="width:100%;"></textarea>
+      <div style="margin-top:6px;">
+        <label style="font-size:11px;color:rgba(255,255,255,0.4);cursor:pointer;display:inline-flex;align-items:center;gap:4px;">
+          <input type="file" id="streamerQtImg" accept="image/*" style="display:none;" onchange="previewStreamerQtImg()">
+          📎 Add image
+        </label>
+        <span id="streamerQtImgPreview" style="font-size:11px;color:rgba(255,255,255,0.3);margin-left:8px;"></span>
+        <button id="streamerQtImgClear" onclick="clearStreamerQtImg()" style="display:none;background:none;border:none;color:#ef4444;font-size:11px;cursor:pointer;margin-left:4px;">✕ Remove</button>
+      </div>
+    </div>
+
+    <button id="streamerPostQtBtn" class="post-btn" onclick="streamerPostQt()" style="width:100%;padding:12px;font-size:14px;">Post Quote Tweet 𝕏</button>
+  </div>
+
+  <!-- Feed of past posts -->
+  <div style="margin-top:24px;border-top:1px solid rgba(255,255,255,0.06);padding-top:16px;">
+    <h3 style="font-size:14px;margin-bottom:12px;color:rgba(255,255,255,0.6);">Posted Tweets</h3>
+    <div id="streamerFeed" style="display:flex;flex-direction:column;gap:10px;">
+      <div style="color:rgba(255,255,255,0.3);font-size:12px;">Loading...</div>
+    </div>
+  </div>
+</div>
+
+<!-- Streamer Feed QT Modal -->
+<div id="streamerFeedQtModalBg" class="modal-bg" onclick="if(event.target===this)closeStreamerFeedQtModal()">
+  <div class="modal glass" style="max-width:520px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <span style="font-size:15px;font-weight:700;">Quote This Tweet</span>
+      <button onclick="closeStreamerFeedQtModal()" style="background:none;border:none;color:rgba(255,255,255,0.5);font-size:18px;cursor:pointer;">✕</button>
+    </div>
+    <div id="streamerFeedQtOriginal" style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:12px;max-height:100px;overflow-y:auto;padding:10px;background:rgba(0,0,0,0.2);border-radius:8px;line-height:1.5;"></div>
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;"><span style="position:relative;"><button class="emoji-btn" onclick="toggleEmojiPicker(event,'streamerFeedQtText')">😀</button></span></div>
+    <textarea id="streamerFeedQtText" class="tweet-textarea" rows="3" placeholder="Write your quote tweet..." style="width:100%;margin-bottom:12px;"></textarea>
+    <div style="margin-bottom:12px;">
+      <label style="font-size:11px;color:rgba(255,255,255,0.4);cursor:pointer;display:inline-flex;align-items:center;gap:4px;">
+        <input type="file" id="streamerFeedQtImg" accept="image/*" style="display:none;">
+        📎 Add image
+      </label>
+    </div>
+    <button class="post-btn" id="streamerFeedQtPostBtn" onclick="streamerPostFeedQt()" style="width:100%;padding:12px;">Post Quote Tweet 𝕏</button>
+  </div>
+</div>
+
 <!-- Analytics Tab -->
 <div id="tabAnalytics" class="glass card" style="display:none;">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
@@ -1194,13 +1291,16 @@
     document.getElementById('tabGenerate').style.display = tab === 'generate' ? '' : 'none';
     document.getElementById('tabWinners').style.display  = tab === 'winners'  ? '' : 'none';
     document.getElementById('tabAffiliate').style.display = tab === 'affiliate' ? '' : 'none';
+    document.getElementById('tabStreamer').style.display  = tab === 'streamer' ? '' : 'none';
     document.getElementById('tabAnalytics').style.display = tab === 'analytics' ? '' : 'none';
     document.getElementById('tabBtnGenerate').classList.toggle('active', tab === 'generate');
     document.getElementById('tabBtnWinners').classList.toggle('active',  tab === 'winners');
     document.getElementById('tabBtnAffiliate').classList.toggle('active', tab === 'affiliate');
+    document.getElementById('tabBtnStreamer').classList.toggle('active',  tab === 'streamer');
     document.getElementById('tabBtnAnalytics').classList.toggle('active', tab === 'analytics');
     if (tab === 'winners') loadWinners();
     if (tab === 'affiliate') loadOjFeed();
+    if (tab === 'streamer') loadStreamerFeed();
     if (tab === 'analytics') loadAnalytics();
   }
 
@@ -2136,6 +2236,202 @@
       activeEmojiTarget = null;
     }
   });
+
+  // ── Streamer Tab ─────────────────────────────────────────────────────────
+  let streamerFeedQtTarget = null; // { tweet1_id, text }
+
+  function setStreamerMode(mode) {
+    document.getElementById('streamerThreadForm').style.display = mode === 'thread' ? '' : 'none';
+    document.getElementById('streamerQtForm').style.display = mode === 'qt' ? '' : 'none';
+    document.getElementById('streamerModeThread').classList.toggle('active', mode === 'thread');
+    document.getElementById('streamerModeQt').classList.toggle('active', mode === 'qt');
+  }
+
+  function previewStreamerImg(num) {
+    const input = document.getElementById('streamerImg' + num);
+    const preview = document.getElementById('streamerImg' + num + 'Preview');
+    const clearBtn = document.getElementById('streamerImg' + num + 'Clear');
+    if (input.files[0]) {
+      preview.textContent = input.files[0].name;
+      clearBtn.style.display = 'inline';
+    }
+  }
+
+  function clearStreamerImg(num) {
+    document.getElementById('streamerImg' + num).value = '';
+    document.getElementById('streamerImg' + num + 'Preview').textContent = '';
+    document.getElementById('streamerImg' + num + 'Clear').style.display = 'none';
+  }
+
+  function previewStreamerQtImg() {
+    const input = document.getElementById('streamerQtImg');
+    const preview = document.getElementById('streamerQtImgPreview');
+    const clearBtn = document.getElementById('streamerQtImgClear');
+    if (input.files[0]) {
+      preview.textContent = input.files[0].name;
+      clearBtn.style.display = 'inline';
+    }
+  }
+
+  function clearStreamerQtImg() {
+    document.getElementById('streamerQtImg').value = '';
+    document.getElementById('streamerQtImgPreview').textContent = '';
+    document.getElementById('streamerQtImgClear').style.display = 'none';
+  }
+
+  async function streamerPostThread() {
+    const tweet1 = document.getElementById('streamerTweet1').value.trim();
+    const tweet2 = document.getElementById('streamerTweet2').value.trim();
+    if (!tweet1 || !tweet2) { showToast('Both tweets are required', 'error'); return; }
+    if (!isConnected) { showToast('Connect Twitter first', 'error'); return; }
+
+    const btn = document.getElementById('streamerPostThreadBtn');
+    btn.disabled = true; btn.textContent = 'Posting...';
+
+    try {
+      const fd = new FormData();
+      fd.append('tweet1', tweet1);
+      fd.append('tweet2', tweet2);
+      const img1 = document.getElementById('streamerImg1').files[0];
+      const img2 = document.getElementById('streamerImg2').files[0];
+      if (img1) fd.append('image1', img1);
+      if (img2) fd.append('image2', img2);
+
+      const data = await fetch('/streamer/post-thread', { method: 'POST', body: fd }).then(r => r.json());
+      if (data.error) throw new Error(data.error);
+
+      showToast('Thread posted!', 'success');
+      document.getElementById('streamerTweet1').value = '';
+      document.getElementById('streamerTweet2').value = '';
+      clearStreamerImg(1);
+      clearStreamerImg(2);
+      loadStreamerFeed();
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      btn.disabled = false; btn.textContent = 'Post Thread 𝕏';
+    }
+  }
+
+  async function streamerPostQt() {
+    const qtText = document.getElementById('streamerQtText').value.trim();
+    const qtUrl = document.getElementById('streamerQtUrl').value.trim();
+    if (!qtText) { showToast('Write your quote tweet text', 'error'); return; }
+    if (!qtUrl) { showToast('Paste the tweet URL to quote', 'error'); return; }
+    if (!isConnected) { showToast('Connect Twitter first', 'error'); return; }
+
+    const btn = document.getElementById('streamerPostQtBtn');
+    btn.disabled = true; btn.textContent = 'Posting...';
+
+    try {
+      const fd = new FormData();
+      fd.append('tweet1', qtText);
+      fd.append('quote_tweet_url', qtUrl);
+      const img = document.getElementById('streamerQtImg').files[0];
+      if (img) fd.append('image1', img);
+
+      const data = await fetch('/streamer/post-qt', { method: 'POST', body: fd }).then(r => r.json());
+      if (data.error) throw new Error(data.error);
+
+      showToast('Quote tweet posted!', 'success');
+      document.getElementById('streamerQtText').value = '';
+      document.getElementById('streamerQtUrl').value = '';
+      clearStreamerQtImg();
+      loadStreamerFeed();
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      btn.disabled = false; btn.textContent = 'Post Quote Tweet 𝕏';
+    }
+  }
+
+  // Store feed data for the modal
+  let streamerFeedData = [];
+
+  async function loadStreamerFeed() {
+    const container = document.getElementById('streamerFeed');
+    try {
+      const data = await fetch('/streamer/feed').then(r => r.json());
+      streamerFeedData = data.posts || [];
+      if (streamerFeedData.length === 0) {
+        container.innerHTML = '<div style="color:rgba(255,255,255,0.3);font-size:12px;">No posts yet. Post your first thread above!</div>';
+        return;
+      }
+
+      container.innerHTML = streamerFeedData.map((p, idx) => {
+        const date = new Date(p.posted_at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+        const isQt = p.is_quote_tweet;
+        const typeLabel = isQt ? 'QT' : 'Thread';
+        const typeColor = isQt ? '#a855f7' : '#3b82f6';
+        const viewUrl = p.tweet1_id ? `https://x.com/i/status/${p.tweet1_id}` : '#';
+
+        let content = `<div style="font-size:13px;color:rgba(255,255,255,0.75);line-height:1.5;margin-bottom:6px;white-space:pre-wrap;">${escHtml(p.tweet1)}</div>`;
+        if (p.tweet2) {
+          content += `<div style="font-size:12px;color:rgba(255,255,255,0.5);line-height:1.4;border-left:2px solid rgba(255,255,255,0.1);padding-left:10px;margin-bottom:6px;white-space:pre-wrap;">${escHtml(p.tweet2)}</div>`;
+        }
+        if (isQt && p.quote_tweet_id) {
+          content += `<div style="font-size:10px;color:rgba(255,255,255,0.25);margin-bottom:6px;">Quoted: x.com/i/status/${p.quote_tweet_id}</div>`;
+        }
+
+        return `<div style="padding:12px;background:rgba(0,0,0,0.2);border-radius:10px;border:1px solid rgba(255,255,255,0.04);">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <span style="font-size:9px;font-weight:700;padding:2px 8px;border-radius:4px;background:${typeColor}22;color:${typeColor};text-transform:uppercase;">${typeLabel}</span>
+            <span style="font-size:10px;color:rgba(255,255,255,0.3);">${date}</span>
+          </div>
+          ${content}
+          <div style="display:flex;gap:8px;align-items:center;">
+            ${p.tweet1_id ? `<button class="aff-qt-btn" onclick="openStreamerFeedQtModal(${idx})" style="font-size:11px;">✍️ Quote Tweet</button>` : ''}
+            <a href="${viewUrl}" target="_blank" rel="noopener" style="font-size:10px;color:rgba(255,255,255,0.3);text-decoration:none;">View on X ↗</a>
+          </div>
+        </div>`;
+      }).join('');
+    } catch (err) {
+      container.innerHTML = `<div style="color:#ef4444;font-size:12px;">Failed to load: ${err.message}</div>`;
+    }
+  }
+
+  function openStreamerFeedQtModal(idx) {
+    const post = streamerFeedData[idx];
+    if (!post || !post.tweet1_id) return;
+    streamerFeedQtTarget = post;
+    document.getElementById('streamerFeedQtOriginal').textContent = post.tweet1 + (post.tweet2 ? '\n\n' + post.tweet2 : '');
+    document.getElementById('streamerFeedQtText').value = '';
+    document.getElementById('streamerFeedQtModalBg').classList.add('open');
+  }
+
+  function closeStreamerFeedQtModal() {
+    document.getElementById('streamerFeedQtModalBg').classList.remove('open');
+    streamerFeedQtTarget = null;
+  }
+
+  async function streamerPostFeedQt() {
+    if (!streamerFeedQtTarget) return;
+    const qtText = document.getElementById('streamerFeedQtText').value.trim();
+    if (!qtText) { showToast('Write your quote tweet text', 'error'); return; }
+    if (!isConnected) { showToast('Connect Twitter first', 'error'); return; }
+
+    const btn = document.getElementById('streamerFeedQtPostBtn');
+    btn.disabled = true; btn.textContent = 'Posting...';
+
+    try {
+      const fd = new FormData();
+      fd.append('tweet1', qtText);
+      fd.append('quote_tweet_id', streamerFeedQtTarget.tweet1_id);
+      const img = document.getElementById('streamerFeedQtImg').files[0];
+      if (img) fd.append('image1', img);
+
+      const data = await fetch('/streamer/post-qt', { method: 'POST', body: fd }).then(r => r.json());
+      if (data.error) throw new Error(data.error);
+
+      showToast('Quote tweet posted!', 'success');
+      closeStreamerFeedQtModal();
+      loadStreamerFeed();
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      btn.disabled = false; btn.textContent = 'Post Quote Tweet 𝕏';
+    }
+  }
 
   // ── AI QT Suggestions ────────────────────────────────────────────────────
   async function generateAiQtSuggestions() {
