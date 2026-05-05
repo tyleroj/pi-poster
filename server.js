@@ -62,6 +62,23 @@ if (!qCols.includes('tool_path'))     db.exec('ALTER TABLE queue ADD COLUMN tool
 if (!qCols.includes('is_quote_tweet')) db.exec('ALTER TABLE queue ADD COLUMN is_quote_tweet INTEGER DEFAULT 0');
 if (!qCols.includes('quote_tweet_id')) db.exec('ALTER TABLE queue ADD COLUMN quote_tweet_id TEXT');
 
+// Streamer posts table — tracks threads + QTs posted via the Streamer tab
+db.exec(`
+  CREATE TABLE IF NOT EXISTS streamer_posts (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    tweet1         TEXT NOT NULL,
+    tweet2         TEXT,
+    tweet1_id      TEXT,
+    tweet2_id      TEXT,
+    is_quote_tweet INTEGER DEFAULT 0,
+    quote_tweet_id TEXT,
+    quote_tweet_url TEXT,
+    posted_at      INTEGER DEFAULT (unixepoch() * 1000),
+    posted_by      TEXT DEFAULT 'streamer',
+    error          TEXT
+  );
+`);
+
 // QT log table — stores quote tweet text for building suggestion database
 db.exec(`
   CREATE TABLE IF NOT EXISTS qt_log (
@@ -1716,6 +1733,101 @@ app.post('/test/video-tweet', uploadVideo.single('video'), async (req, res) => {
     console.error('[video-test] Error:', err);
     steps.push({ step: 'ERROR', detail: err.message });
     res.status(500).json({ success: false, error: err.message, steps });
+  }
+});
+
+// ── Streamer endpoints ────────────────────────────────────────────────────────
+
+// Post a 2-tweet thread from the Streamer tab (with optional images on each tweet)
+app.post('/streamer/post-thread', upload.fields([
+  { name: 'image1', maxCount: 1 },
+  { name: 'image2', maxCount: 1 }
+]), async (req, res) => {
+  try {
+    const { tweet1, tweet2 } = req.body;
+    if (!tweet1 || !tweet2) return res.status(400).json({ error: 'Both tweets are required' });
+
+    const img1 = req.files?.['image1']?.[0] || null;
+    const img2 = req.files?.['image2']?.[0] || null;
+
+    console.log(`[streamer] Thread: img1=${img1 ? Math.round(img1.size/1024) + 'KB' : 'none'}, img2=${img2 ? Math.round(img2.size/1024) + 'KB' : 'none'}`);
+
+    // Reuse the existing postThread function (slip→tweet1, toolCard→tweet2)
+    const result = await postThread(tweet1, tweet2, img1, img2);
+
+    // Save to streamer_posts
+    db.prepare(`INSERT INTO streamer_posts (tweet1, tweet2, tweet1_id, tweet2_id, posted_at)
+                VALUES (?,?,?,?,?)`)
+      .run(tweet1, tweet2, result.tweet1Id, result.tweet2Id, Date.now());
+
+    res.json({ success: true, ...result });
+  } catch (err) {
+    console.error('[streamer] Thread post error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Post a quote tweet from the Streamer tab
+app.post('/streamer/post-qt', upload.fields([
+  { name: 'image1', maxCount: 1 }
+]), async (req, res) => {
+  try {
+    const { tweet1, quote_tweet_id, quote_tweet_url } = req.body;
+    if (!tweet1) return res.status(400).json({ error: 'Tweet text is required' });
+
+    // Resolve the quote target — either a direct ID or extract from a URL
+    let qtId = quote_tweet_id || null;
+    const qtUrl = quote_tweet_url || null;
+
+    if (!qtId && qtUrl) {
+      // Extract tweet ID from URL like https://x.com/user/status/123456 or https://twitter.com/user/status/123456
+      const urlMatch = qtUrl.match(/(?:twitter\.com|x\.com)\/\w+\/status\/(\d+)/);
+      if (urlMatch) qtId = urlMatch[1];
+    }
+
+    if (!qtId) return res.status(400).json({ error: 'No valid tweet ID or URL provided' });
+
+    const img1 = req.files?.['image1']?.[0] || null;
+
+    // Use URL-in-text method (proven reliable, bypasses quote restrictions)
+    const tweetUrl = `https://x.com/i/status/${qtId}`;
+    const tweetBody = { text: `${tweet1}\n${tweetUrl}` };
+
+    if (img1?.buffer) {
+      try {
+        const mediaId = await uploadMedia(img1.buffer, img1.mimetype);
+        tweetBody.media = { media_ids: [mediaId] };
+      } catch (e) {
+        console.error('[streamer] Image upload failed:', e.message);
+      }
+    }
+
+    console.log(`[streamer] QT posting, target: ${qtId}`);
+    const r = await twitterFetch('POST', '/tweets', tweetBody);
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || d.title || JSON.stringify(d));
+
+    // Save to streamer_posts
+    db.prepare(`INSERT INTO streamer_posts (tweet1, tweet1_id, is_quote_tweet, quote_tweet_id, quote_tweet_url, posted_at)
+                VALUES (?,?,?,?,?,?)`)
+      .run(tweet1, d.data.id, 1, qtId, qtUrl || null, Date.now());
+
+    res.json({ success: true, tweet1Id: d.data.id });
+  } catch (err) {
+    console.error('[streamer] QT post error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get the streamer posts feed
+app.get('/streamer/feed', (req, res) => {
+  try {
+    const posts = db.prepare(
+      'SELECT * FROM streamer_posts ORDER BY posted_at DESC LIMIT 100'
+    ).all();
+    res.json({ posts });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
