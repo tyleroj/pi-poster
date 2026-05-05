@@ -1834,4 +1834,15 @@ app.get('/streamer/feed', (req, res) => {
 // Health check endpoint (for uptime monitors like UptimeRobot)
 app.get('/health', (req, res) => res.json({ status: 'ok', ts: Date.now() }));
 
-app.listen(PORT, () => console.log(`PI Poster running on port ${PORT}`));
+app.listen(PORT, () => {
+  console.log(`PI Poster running on port ${PORT}`);
+
+  // Self-ping to prevent Render free tier from sleeping (every 14 minutes)
+  const SELF_URL = process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`;
+  setInterval(() => {
+    fetch(`${SELF_URL}/health`)
+      .then(r => r.json())
+      .then(d => console.log('[keepalive] ping ok:', d.ts))
+      .catch(err => console.warn('[keepalive] ping failed:', err.message));
+  }, 14 * 60 * 1000);
+});
