@@ -88,6 +88,12 @@
       padding: 24px; margin-bottom: 16px;
     }
 
+    /* Wider cards for Streamer & Analytics */
+    #tabStreamer > .main-card,
+    #tabAnalytics > .main-card {
+      max-width: 900px;
+    }
+
     .section-title {
       font-size: 11px; font-weight: 700; text-transform: uppercase;
       letter-spacing: 1px; color: #475569; margin-bottom: 14px;
@@ -853,6 +859,30 @@
       border: 1px solid rgba(255,255,255,0.08);
       object-fit: cover;
     }
+    /* ── Mobile responsive ── */
+    @media (max-width: 680px) {
+      body { padding: 12px 6px 60px; }
+      .header { padding: 10px 14px; }
+      h1 { font-size: 15px; }
+      .main-card { padding: 16px !important; }
+      .tab-nav { gap: 2px; padding: 4px; }
+      .tab-btn { font-size: 11px; padding: 7px 4px; }
+      .upload-row { grid-template-columns: 1fr; }
+      .tweet-compose { padding: 12px 14px; }
+      .tweet-textarea { font-size: 14px; }
+      .tweet-actions-row { padding: 10px 14px; flex-wrap: wrap; }
+      .post-btn, .queue-btn { font-size: 13px; padding: 9px 14px; }
+      .modal { margin: 10px; max-width: calc(100vw - 20px) !important; }
+      #analyticsSummary { grid-template-columns: repeat(3, 1fr); gap: 6px; }
+      #analyticsSummary > div { padding: 10px; }
+      #analyticsSummary [style*="font-size:28px"] { font-size: 22px !important; }
+      .emoji-picker { width: 240px; right: -40px; }
+    }
+    @media (max-width: 420px) {
+      .tab-btn { font-size: 10px; padding: 6px 2px; }
+      #analyticsSummary { grid-template-columns: repeat(2, 1fr); }
+      .emoji-picker { width: 220px; right: -60px; }
+    }
   </style>
 </head>
 <body>
@@ -1130,7 +1160,8 @@
 </div><!-- end tabAffiliate -->
 
 <!-- Streamer Tab -->
-<div id="tabStreamer" class="glass card" style="display:none;">
+<div id="tabStreamer" style="display:none;">
+<div class="main-card glass" style="padding:24px; max-width:900px;">
   <h2 style="margin-bottom:16px;font-size:18px;">Streamer Post Tool</h2>
 
   <!-- Mode toggle: Thread vs Quote Tweet -->
@@ -1203,7 +1234,8 @@
       <div style="color:rgba(255,255,255,0.3);font-size:12px;">Loading...</div>
     </div>
   </div>
-</div>
+</div><!-- end main-card -->
+</div><!-- end tabStreamer -->
 
 <!-- Streamer Feed QT Modal -->
 <div id="streamerFeedQtModalBg" class="modal-bg" onclick="if(event.target===this)closeStreamerFeedQtModal()">
@@ -1226,7 +1258,8 @@
 </div>
 
 <!-- Analytics Tab -->
-<div id="tabAnalytics" class="glass card" style="display:none;">
+<div id="tabAnalytics" style="display:none;">
+<div class="main-card glass" style="padding:24px; max-width:900px;">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
     <h2 style="margin:0;font-size:18px;">Analytics</h2>
     <div style="display:flex;gap:8px;align-items:center;">
@@ -1283,7 +1316,8 @@
     <div style="font-size:13px;font-weight:700;margin-bottom:10px;">Top Performers</div>
     <div id="analyticsTopPerformers" style="display:flex;flex-direction:column;gap:6px;"></div>
   </div>
-</div>
+</div><!-- end main-card -->
+</div><!-- end tabAnalytics -->
 
 <script>
   // ── Tabs ──────────────────────────────────────────────────────────────────
@@ -2148,13 +2182,17 @@
 
   // ── Emoji picker ─────────────────────────────────────────────────────────
   const EMOJI_DATA = [
-    { label: 'Sports', emojis: ['🏀','⚾','🏈','⚽','🏒','🎾','🏐','🥊','🏆','🥇','🏅','🎯'] },
-    { label: 'Money', emojis: ['💰','💵','💸','🤑','📈','📉','💎','🏦','💳','🪙','📊','🔥'] },
-    { label: 'Hands', emojis: ['👆','👇','👉','👈','🤝','👏','🙌','💪','✊','🫡','👊','🤞'] },
-    { label: 'Reactions', emojis: ['🔥','💣','🚀','⚡','✅','❌','⚠️','💡','👀','🧠','😤','🫣'] },
-    { label: 'Objects', emojis: ['🧵','📌','📍','🔗','🔒','🔓','📝','🗒️','📱','💻','🎬','📸'] },
-    { label: 'Symbols', emojis: ['➡️','⬆️','⬇️','↗️','↘️','🔄','▶️','⏰','🕐','🔔','💯','‼️'] },
-    { label: 'Faces', emojis: ['😀','😂','🤣','😎','🤔','😱','🥶','🥵','😈','💀','🤡','👑'] }
+    { label: 'Faces', emojis: ['😀','😃','😄','😁','😆','😅','🤣','😂','🙂','😉','😊','😇','🥰','😍','🤩','😘','😗','😋','😛','😜','🤪','😝','🤑','🤗','🤭','🫢','🫣','🤫','🤔','🫡','🤐','🤨','😐','😑','😶','🫥','😏','😒','🙄','😬','🤥','😌','😔','😪','🤤','😴','😷','🤒','🤕','🤢','🤮','🥵','🥶','🥴','😵','🤯','🤠','🥳','🥸','😎','🤓','🧐','😕','🫤','😟','🙁','😮','😯','😲','😳','🥺','🥹','😦','😧','😨','😰','😥','😢','😭','😱','😖','😣','😞','😓','😩','😫','🥱','😤','😡','😠','🤬','😈','👿','💀','☠️','💩','🤡','👹','👺','👻','👽','👾','🤖'] },
+    { label: 'Sports', emojis: ['🏀','⚾','🏈','⚽','🏒','🎾','🏐','🥊','🏆','🥇','🥈','🥉','🏅','🎯','🎳','🏓','🏸','🥅','⛳','🏇','🎰','🎲','♟️','🎮','🏋️','🤸','⛷️','🏂','🤺','🚴','🏊','🤽','🤾','🥏','🥍','🪃','🏹','🛹','🛷','⛸️','🤼','🧗','🤿'] },
+    { label: 'Money', emojis: ['💰','💵','💸','🤑','📈','📉','💎','🏦','💳','🪙','📊','🔥','💲','🏧','💴','💶','💷','🧾','💹','📋','🧮','📑','🏷️','💼','📦'] },
+    { label: 'Hands', emojis: ['👍','👎','👆','👇','👉','👈','🤝','👏','🙌','💪','✊','🫡','👊','🤞','✌️','🤟','🤘','🤙','👋','🤚','🖐️','✋','🖖','🫱','🫲','🫳','🫴','👌','🤌','🤏','🫰','☝️','🙏','🫶','✍️','💅','🤳','🫵'] },
+    { label: 'Reactions', emojis: ['🔥','💣','🚀','⚡','✅','❌','⚠️','💡','👀','🧠','😤','🫣','💥','✨','🌟','⭐','🌈','🎉','🎊','🎆','🎇','🪄','💫','❤️','🧡','💛','💚','💙','💜','🖤','🤍','🤎','💔','❤️‍🔥','💕','💖','💗','💘','💝','💓','💞','💟'] },
+    { label: 'Animals', emojis: ['🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐨','🐯','🦁','🐮','🐷','🐸','🐵','🙈','🙉','🙊','🐔','🐧','🐦','🐤','🦅','🦆','🦉','🐺','🐗','🐴','🦄','🐝','🐛','🦋','🐌','🐞','🐙','🦑','🦀','🐠','🐟','🐬','🐳','🐋','🦈','🐊','🐅','🐆','🦓','🦍','🦧','🐘','🦣','🦏','🦛'] },
+    { label: 'Food', emojis: ['🍕','🍔','🍟','🌭','🥓','🍗','🍖','🥩','🌮','🌯','🥗','🍜','🍝','🍣','🍱','🍩','🍪','🎂','🍰','🧁','🍫','🍬','🍭','🍺','🍻','🥂','🍷','🍸','🍹','🧃','☕','🍵','🧋'] },
+    { label: 'Objects', emojis: ['🧵','📌','📍','🔗','🔒','🔓','📝','🗒️','📱','💻','🎬','📸','🎥','📺','📻','🎙️','🎧','🔊','🔔','🔕','📢','📣','🏳️','🏴','🚩','🏁','💬','💭','🗯️','♠️','♥️','♦️','♣️','🃏','🎴','🀄','🕶️','🩴','👟','👑','🎩','🧢','💍','💄','🎒','🧳','☂️'] },
+    { label: 'Symbols', emojis: ['➡️','⬆️','⬇️','⬅️','↗️','↘️','↙️','↖️','↕️','↔️','🔄','▶️','⏩','◀️','⏪','⏫','⏬','⏰','🕐','🕑','🕒','🕓','🕔','🔔','💯','‼️','⁉️','❓','❗','〰️','➕','➖','➗','✖️','♾️','💲','©️','®️','™️','🔴','🟠','🟡','🟢','🔵','🟣','⚫','⚪','🟤','🔶','🔷','🔸','🔹','▪️','▫️','◾','◽','🏴‍☠️'] },
+    { label: 'Flags', emojis: ['🇺🇸','🇬🇧','🇨🇦','🇦🇺','🇩🇪','🇫🇷','🇪🇸','🇮🇹','🇧🇷','🇲🇽','🇯🇵','🇰🇷','🇨🇳','🇮🇳','🇷🇺','🇳🇱','🇧🇪','🇨🇭','🇦🇹','🇸🇪','🇳🇴','🇩🇰','🇫🇮','🇮🇪','🇵🇹','🇵🇱','🇹🇷','🇿🇦','🇦🇷','🇨🇴'] },
+    { label: 'Travel', emojis: ['🚗','🚕','🚌','🏎️','🚓','🚑','🚒','✈️','🚀','🛸','🚁','⛵','🚢','🏠','🏡','🏢','🏗️','🏰','🏯','🗽','🗼','⛩️','🕌','🛕','⛪','🕍','🌍','🌎','🌏','🗺️','🧭','🏔️','⛰️','🌋','🏕️','🏖️','🏜️','🏝️','🌅','🌄','🌠','🎆','🌃','🏙️'] }
   ];
 
   let activeEmojiPicker = null;
